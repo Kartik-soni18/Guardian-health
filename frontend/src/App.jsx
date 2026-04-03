@@ -9,6 +9,7 @@ function AppContent() {
   const [logs, setLogs] = useState([]);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentChatId, setCurrentChatId] = useState(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuth();
 
   const addLog = (log) => {
@@ -17,89 +18,113 @@ function AppContent() {
 
   const handleSelectChat = (chatId) => {
     setCurrentChatId(chatId);
+    setSidebarOpen(false);
   };
 
   const handleNewChat = () => {
     setCurrentChatId(null);
+    setSidebarOpen(false);
   };
 
   return (
     <div className="app-container">
+      {/* Sidebar overlay for mobile */}
       {user && (
-        <Sidebar 
-          currentChatId={currentChatId} 
-          onSelectChat={handleSelectChat}
-          onNewChat={handleNewChat}
+        <div
+          className={`sidebar-overlay ${sidebarOpen ? 'visible' : ''}`}
+          onClick={() => setSidebarOpen(false)}
         />
       )}
-      
+
+      {user && (
+        <Sidebar
+          currentChatId={currentChatId}
+          onSelectChat={handleSelectChat}
+          onNewChat={handleNewChat}
+          isOpen={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+        />
+      )}
+
       <main className="main-content">
         <header>
-          <div className="logo">GuardianHealth</div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', gap: '2rem' }}>
-            <div style={{ display: 'flex', gap: '1rem', fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              <span>Secure Health Agent</span>
-              <span>•</span>
-              <span>v3.0 Mongo</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            {/* Hamburger — only visible on mobile when logged in */}
+            {user && (
+              <button
+                className="hamburger-btn"
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open menu"
+              >
+                <span />
+                <span />
+                <span />
+              </button>
+            )}
+            <div className="logo">GuardianHealth</div>
+          </div>
+
+          <div className="header-right">
+            {/* Persistent privacy badge */}
+            <div className="header-privacy-badge">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+              </svg>
+              HIPAA Secure
             </div>
-            
-            <div className="user-menu" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              {user ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                  <button 
-                    onClick={logout}
-                    style={{ 
-                      background: 'rgba(255,255,255,0.05)', 
-                      border: '1px solid var(--glass-border)', 
-                      color: 'white', 
-                      padding: '0.4rem 0.8rem', 
-                      borderRadius: '8px',
-                      fontSize: '0.8rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Logout
-                  </button>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => setIsAuthModalOpen(true)}
-                  style={{ 
-                    background: 'var(--accent-primary)', 
-                    border: 'none', 
-                    color: 'white', 
-                    padding: '0.5rem 1.25rem', 
-                    borderRadius: '10px',
-                    fontSize: '0.85rem',
-                    fontWeight: '600',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Sign In
-                </button>
-              )}
-            </div>
+
+            {user ? (
+              <button
+                onClick={logout}
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid var(--glass-border)',
+                  color: 'white',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '8px',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Logout
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                style={{
+                  background: 'var(--accent-primary)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '10px',
+                  fontSize: '0.85rem',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Sign In
+              </button>
+            )}
           </div>
         </header>
-        
-        <div className="main-layout" style={{ gridTemplateColumns: user ? '1fr 300px' : '1fr' }}>
-          <ChatInterface 
-            onNewLog={addLog} 
+
+        <div className={`main-layout ${!user ? 'with-audit' : ''}`}>
+          <ChatInterface
+            onNewLog={addLog}
             chatId={currentChatId}
             onChatStarted={(id) => setCurrentChatId(id)}
           />
           {!user && <AuditLog logs={logs} />}
         </div>
 
-        <footer style={{ marginTop: '2rem', padding: '2rem 0', textAlign: 'center', fontSize: '0.75rem', color: '#475569', borderTop: '1px solid var(--glass-border)' }}>
-          &copy; 2024 GuardianHealth Portfolio • v3.0 MongoDB Persistence
-        </footer>
+
       </main>
 
-      <AuthModal 
-        isOpen={isAuthModalOpen} 
-        onClose={() => setIsAuthModalOpen(false)} 
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
       />
     </div>
   );

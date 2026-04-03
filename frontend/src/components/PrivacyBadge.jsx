@@ -7,29 +7,30 @@ const PrivacyBadge = ({ privacy }) => {
   const isDetected = privacy.pii_detected;
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, y: 10 }}
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       style={{
-        fontSize: '0.75rem',
-        padding: '0.75rem 1rem',
-        borderRadius: '12px',
-        background: isDetected ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+        fontSize: '0.72rem',
+        padding: '0.4rem 0.75rem',
+        borderRadius: '20px',
+        background: isDetected ? 'rgba(239, 68, 68, 0.08)' : 'rgba(16, 185, 129, 0.08)',
         color: isDetected ? '#ef4444' : '#10b981',
-        display: 'flex',
+        display: 'inline-flex',
         alignItems: 'center',
-        gap: '0.75rem',
-        marginBottom: '0.75rem',
-        border: `1px solid ${isDetected ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.2)'}`,
-        width: 'fit-content'
+        gap: '0.5rem',
+        marginBottom: '0.6rem',
+        border: `1px solid ${isDetected ? 'rgba(239, 68, 68, 0.18)' : 'rgba(16, 185, 129, 0.18)'}`,
       }}
     >
-      <span style={{ fontSize: '1.1rem' }}>{isDetected ? '🛡️' : '✅'}</span>
+      <span style={{ fontSize: '0.85rem' }}>{isDetected ? '🛡️' : '✅'}</span>
       <div>
-        <div style={{ fontWeight: '700', marginBottom: '1px' }}>
+        <span style={{ fontWeight: '700' }}>
           {isDetected ? 'PII Redacted' : 'Privacy Verified'}
-        </div>
-        <div style={{ opacity: 0.8, fontSize: '0.7rem' }}>{privacy.message}</div>
+        </span>
+        {privacy.message && (
+          <span style={{ opacity: 0.75, marginLeft: '0.35rem' }}>— {privacy.message}</span>
+        )}
       </div>
     </motion.div>
   );
