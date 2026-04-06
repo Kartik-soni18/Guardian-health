@@ -3,6 +3,7 @@ import ChatInterface from './components/ChatInterface';
 import Sidebar from './components/Sidebar';
 import AuditLog from './components/AuditLog';
 import AuthModal from './components/AuthModal';
+import KaggleEvalPage from './components/KaggleEvalPage';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 function AppContent() {
@@ -10,6 +11,7 @@ function AppContent() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [currentChatId, setCurrentChatId] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'eval'
   const { user, logout } = useAuth();
 
   const addLog = (log) => {
@@ -65,6 +67,30 @@ function AppContent() {
           </div>
 
           <div className="header-right">
+            {/* Tab switcher */}
+            <div style={{ display: 'flex', gap: '0.3rem', background: 'rgba(255,255,255,0.05)', borderRadius: '9px', padding: '0.25rem' }}>
+              {[{ id: 'chat', label: 'Chat' }, { id: 'eval', label: 'Eval' }].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    background: activeTab === tab.id ? 'rgba(99,102,241,0.35)' : 'transparent',
+                    border: activeTab === tab.id ? '1px solid rgba(99,102,241,0.5)' : '1px solid transparent',
+                    color: activeTab === tab.id ? '#a5b4fc' : '#64748b',
+                    padding: '0.3rem 0.8rem',
+                    borderRadius: '7px',
+                    fontSize: '0.8rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
             {/* Persistent privacy badge */}
             <div className="header-privacy-badge">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -110,13 +136,21 @@ function AppContent() {
           </div>
         </header>
 
-        <div className={`main-layout ${!user ? 'with-audit' : ''}`}>
-          <ChatInterface
-            onNewLog={addLog}
-            chatId={currentChatId}
-            onChatStarted={(id) => setCurrentChatId(id)}
-          />
-          {!user && <AuditLog logs={logs} />}
+        <div className={`main-layout ${!user && activeTab === 'chat' ? 'with-audit' : ''}`}>
+          {activeTab === 'chat' ? (
+            <>
+              <ChatInterface
+                onNewLog={addLog}
+                chatId={currentChatId}
+                onChatStarted={(id) => setCurrentChatId(id)}
+              />
+              {!user && <AuditLog logs={logs} />}
+            </>
+          ) : (
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              <KaggleEvalPage />
+            </div>
+          )}
         </div>
 
 
