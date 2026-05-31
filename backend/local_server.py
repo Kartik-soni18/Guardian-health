@@ -1,137 +1,145 @@
 import sys
 import os
+import time
 import uuid
-from datetime import datetime
-from typing import List, Optional
+from typing import Optional
 
 sys.path.insert(0, os.path.dirname(__file__))
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from app.supervisor import orchestrate as handle
-from app import db, auth
-import uvicorn
+from fastapi.responses import JSONResponse
 from mangum import Mangum
 
-app = FastAPI(title="GuardianHealth API", version="3.0.0")
-handler = Mangum(app, api_gateway_base_path=None)
+from app.core.config import settings
+from app.core.events import lifespan
+from app.api.router import api_router
+from app.services.auth_service import (
+    get_current_user_optional,
+    get_password_hash,
+    verify_password,
+    create_access_token,
+)
+from app.services.chat_service import ChatService
+from app.services.triage_service import TriageService
+from app import db
 
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000,http://localhost:8080").split(",")
-if "https://kartik-soni18.github.io" not in allowed_origins:
-    allowed_origins.append("https://kartik-soni18.github.io")
+app = FastAPI(
+    title="GuardianHealth API",
+    version="3.2.0",
+    lifespan=lifespan,
+)
+_mangum_handler = Mangum(app, api_gateway_base_path=None)
 
+
+def handler(event, context):
+    """Lambda entry point."""
+    return _mangum_handler(event, context)
+
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-class UserCreate(BaseModel):
-    username: str
-    password: str
+# ── Request ID Middleware ─────────────────────────────────────────────────────
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request.state.request_id = request_id
+    start = time.time()
 
-class UserLogin(BaseModel):
-    username: str
-    password: str
+    response = await call_next(request)
 
-class TriageRequest(BaseModel):
-    query: str
-    chat_id: Optional[str] = None
-    conversation_history: Optional[list] = None
+    latency = (time.time() - start) * 1000
+    response.headers["X-Request-ID"] = request_id
 
-class ChatMetadata(BaseModel):
-    chat_id: str
-    title: str
-    last_updated: datetime
-    symptoms: List[str] = []
-    status: str
+    # Attach structured log extras for JSON formatter
+    import logging
+    logger = logging.getLogger("guardianhealth")
+    extra = {
+        "request_id": request_id,
+        "path": request.url.path,
+        "method": request.method,
+        "latency_ms": round(latency, 2),
+    }
+    logger.info("%s %s %d %.2fms", request.method, request.url.path, response.status_code, latency, extra=extra)
+    return response
+
+
+# ── V1 API Router ─────────────────────────────────────────────────────────────
+app.include_router(api_router)
+
+
+# ── Legacy Routes (Backward Compatibility) ────────────────────────────────────
+# These mirror the pre-refactor endpoints so the existing frontend continues
+# to work without changes.
+
+from app.models.user import UserCreate, UserLogin
+from app.models.triage import TriageRequest
 
 
 @app.post("/register")
-async def register(user_data: UserCreate):
+async def legacy_register(user_data: UserCreate):
     users_coll = await db.get_user_collection()
     if await users_coll.find_one({"username": user_data.username}):
-        raise HTTPException(status_code=400, detail="Username already registered.")
+        raise HTTPException(status_code=400, detail="Registration failed. Please try a different username.")
     new_user = {
         "username": user_data.username,
-        "hashed_password": auth.get_password_hash(user_data.password),
-        "created_at": datetime.utcnow(),
+        "hashed_password": get_password_hash(user_data.password),
+        "created_at": __import__("datetime").datetime.utcnow(),
     }
     await users_coll.insert_one(new_user)
-    access_token = auth.create_access_token(data={"sub": user_data.username})
+    access_token = create_access_token(data={"sub": user_data.username})
     return {"access_token": access_token, "token_type": "bearer", "username": user_data.username}
 
 
 @app.post("/login")
-async def login(user_data: UserLogin):
+async def legacy_login(user_data: UserLogin):
     try:
         users_coll = await db.get_user_collection()
         user = await users_coll.find_one({"username": user_data.username})
-    except Exception as e:
+    except Exception:
         raise HTTPException(status_code=503, detail="Database inaccessible.")
-    if not user or not auth.verify_password(user_data.password, user["hashed_password"]):
+    if not user or not verify_password(user_data.password, user["hashed_password"]):
         raise HTTPException(status_code=401, detail="Invalid username or password.")
-    access_token = auth.create_access_token(data={"sub": user_data.username})
+    access_token = create_access_token(data={"sub": user["username"]})
     return {"access_token": access_token, "token_type": "bearer", "username": user["username"]}
 
 
 @app.get("/chats")
-async def get_chats(user=Depends(auth.get_current_user_optional)):
+async def legacy_get_chats(user=Depends(get_current_user_optional)):
     if not user:
         return []
-    try:
-        chats_coll = await db.get_chats_collection()
-        cursor = chats_coll.find({"user_id": user["id"]}).sort("last_updated", -1)
-        chats = []
-        async for entry in cursor:
-            chats.append({
-                "chat_id": entry["chat_id"],
-                "title": entry.get("title", "New Chat"),
-                "last_updated": entry.get("last_updated", datetime.utcnow()),
-                "symptoms": entry.get("symptoms", []),
-                "status": entry.get("status", "new"),
-            })
-        return chats
-    except Exception:
-        return []
+    return await ChatService.list_chats(user["id"])
 
 
 @app.get("/chats/{chat_id}")
-async def get_chat_history(chat_id: str, user=Depends(auth.get_current_user_optional)):
-    try:
-        chats_coll = await db.get_chats_collection()
-        query = {"chat_id": chat_id, "user_id": user["id"]} if user else {"chat_id": chat_id}
-        chat = await chats_coll.find_one(query)
-        return chat.get("messages", []) if chat else []
-    except Exception:
-        return []
+async def legacy_get_chat_history(chat_id: str, user=Depends(get_current_user_optional)):
+    user_id = user["id"] if user else None
+    return await ChatService.get_chat_history(chat_id, user_id)
 
 
 @app.delete("/chats/{chat_id}")
-async def delete_chat(chat_id: str, user=Depends(auth.get_current_user_optional)):
+async def legacy_delete_chat(chat_id: str, user=Depends(get_current_user_optional)):
     if not user:
         raise HTTPException(status_code=401, detail="Authentication required.")
-    try:
-        chats_coll = await db.get_chats_collection()
-        result = await chats_coll.delete_one({"chat_id": chat_id, "user_id": user["id"]})
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Chat not found.")
-        return {"status": "deleted"}
-    except HTTPException:
-        raise
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to delete chat.")
+    deleted = await ChatService.delete_chat(chat_id, user["id"])
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Chat not found.")
+    return {"status": "deleted"}
 
 
 @app.post("/triage")
-async def triage(request: TriageRequest, user=Depends(auth.get_current_user_optional)):
+async def legacy_triage(request: TriageRequest, user=Depends(get_current_user_optional)):
     if not request.query or not request.query.strip():
         raise HTTPException(status_code=400, detail="Query cannot be empty.")
 
@@ -139,7 +147,7 @@ async def triage(request: TriageRequest, user=Depends(auth.get_current_user_opti
     if user and not chat_id:
         chat_id = str(uuid.uuid4())
 
-    result = await handle(
+    result = await TriageService.invoke_graph(
         user_query=request.query,
         user=user,
         chat_id=chat_id,
@@ -154,7 +162,7 @@ async def triage(request: TriageRequest, user=Depends(auth.get_current_user_opti
 
 
 @app.get("/health")
-async def health():
+async def legacy_health():
     try:
         await db.db.command("ping")
         return {"status": "ok", "db": "mongodb connected"}
@@ -163,4 +171,5 @@ async def health():
 
 
 if __name__ == "__main__":
+    import uvicorn
     uvicorn.run("local_server:app", host="0.0.0.0", port=8000, reload=True)

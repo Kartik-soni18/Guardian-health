@@ -12,6 +12,7 @@ build/
 
 # Environment
 .env
+.ENV
 *.env.local
 
 # Node / Frontend

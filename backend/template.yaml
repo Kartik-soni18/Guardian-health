@@ -2,6 +2,11 @@ AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: GuardianHealth — Governance-First Medical Triage Agent
 
+Parameters:
+  EcrImageUri:
+    Type: String
+    Description: Full ECR image URI (e.g. 123456789012.dkr.ecr.ap-southeast-2.amazonaws.com/guardian-health-backend:latest)
+
 Globals:
   Function:
     Timeout: 30
@@ -42,7 +47,7 @@ Resources:
     Properties:
       FunctionName: guardian-health-triage
       PackageType: Image
-      ImageUri: 403916114937.dkr.ecr.ap-southeast-2.amazonaws.com/guardian-health-backend:latest
+      ImageUri: !Ref EcrImageUri
       Description: GuardianHealth FastAPI App — Authentication, Triage, and persistence
       Policies:
         - DynamoDBCrudPolicy:

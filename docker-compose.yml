@@ -1,0 +1,70 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# GuardianHealth — Docker Compose
+#
+# Services
+# ─────────
+#  backend   FastAPI triage & research API          → localhost:8000
+#  chromadb  Local vector DB for caching abstracts  → localhost:8001
+#
+# LM Studio (Bio-Medical-Llama-3-8B) runs natively on the host machine
+# at localhost:1234.  The backend container reaches it via host.docker.internal.
+# ──────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── FastAPI Backend ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: guardian_backend
+    ports:
+      - "8000:8000"
+    environment:
+      # --- Model ---
+      LM_STUDIO_URL: "http://host.docker.internal:1234"
+      LM_STUDIO_MODEL: "QuantFactory/Bio-Medical-Llama-3-8B-GGUF"
+
+      # --- ChromaDB (internal Docker network) ---
+      CHROMA_HOST: "chromadb"
+      CHROMA_PORT: "8000"
+
+      # --- NCBI / PubMed ---
+      NCBI_EMAIL: "guardian-health@example.com"
+
+      # --- App ---
+      MOCK_MODE: "true"
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+
+    volumes:
+      # Hot-reload during development: mount source over the container copy
+      - ./backend:/app
+    depends_on:
+      chromadb:
+        condition: service_started
+    restart: unless-stopped
+    # Mac / Windows: lets the container call the host's localhost (LM Studio)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── ChromaDB Vector Store ────────────────────────────────────────────────
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: guardian_chromadb
+    ports:
+      - "8001:8000"      # 8001 for host access; 8000 for internal service calls
+    volumes:
+      - chroma_data:/chroma/chroma
+    environment:
+      ALLOW_RESET: "true"
+      ANONYMIZED_TELEMETRY: "false"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/heartbeat')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  chroma_data:
+    driver: local
