@@ -9,20 +9,32 @@ logger = logging.getLogger(__name__)
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _ML_MODELS_DIR = os.path.join(_BASE_DIR, "ml_models")
 
-try:
-    _best_model = joblib.load(os.path.join(_ML_MODELS_DIR, "best_model.joblib"))
-    _label_encoder = joblib.load(os.path.join(_ML_MODELS_DIR, "label_encoder.joblib"))
-    with open(os.path.join(_ML_MODELS_DIR, "symptom_cols.json"), "r") as f:
-        _symptom_cols = json.load(f)
-    _models_loaded = True
-    logger.info("ML models loaded successfully")
-except Exception as e:
-    logger.error(f"Failed to load ML models: {e}")
-    _models_loaded = False
-    _best_model = _label_encoder = _symptom_cols = None
+# Lazy-loaded model globals
+_best_model = None
+_label_encoder = None
+_symptom_cols = None
+_models_loaded = False
+
+
+def _load_models():
+    """Lazy-load ML models on first use to avoid heavy init at import time."""
+    global _best_model, _label_encoder, _symptom_cols, _models_loaded
+    if _models_loaded:
+        return
+    try:
+        _best_model = joblib.load(os.path.join(_ML_MODELS_DIR, "best_model.joblib"))
+        _label_encoder = joblib.load(os.path.join(_ML_MODELS_DIR, "label_encoder.joblib"))
+        with open(os.path.join(_ML_MODELS_DIR, "symptom_cols.json"), "r") as f:
+            _symptom_cols = json.load(f)
+        _models_loaded = True
+        logger.info("ML models loaded successfully")
+    except Exception as e:
+        logger.error(f"Failed to load ML models: {e}")
+        _models_loaded = False
 
 
 def predict_disease(symptoms_list: list, verbose: bool = False) -> dict:
+    _load_models()
     if not _models_loaded:
         return {
             "disease": None,
