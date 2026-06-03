@@ -30,3 +30,5 @@ samconfig.toml
 # IDE
 .vscode/
 .idea/
+guardian-health-v2/
+guardian-health-v2.zip

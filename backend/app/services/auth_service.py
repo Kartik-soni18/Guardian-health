@@ -1,52 +1,76 @@
-"""Auth service layer — wraps password hashing, JWT creation, and user lookup."""
+"""GuardianHealth v2 Auth Service — DynamoDB backend, no AWS dependencies."""
 
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from typing import Any, Dict, Optional, Tuple
 
-from app.core.config import settings
-from app import db
-
-pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
-
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
+from app.config import get_settings
+from app.core.security import (
+    create_token_pair,
+    decode_token,
+    get_password_hash,
+    verify_password,
+)
+from app.db.dynamodb import DynamoDBManager
+from app.schemas.user import UserCreate
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+class AuthService:
+    """Handles authentication logic with DynamoDB persistence."""
 
+    def __init__(self, db: DynamoDBManager) -> None:
+        self.db = db
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    async def register(self, user_create: UserCreate) -> Dict[str, Any]:
+        """Register a new user. Raises ValueError on duplicate username."""
+        # Check uniqueness
+        existing = await self.db.get_user_by_username(user_create.username)
+        if existing is not None:
+            raise ValueError("Username already exists")
 
+        password_hash = get_password_hash(user_create.password)
+        user_data = {
+            "username": user_create.username,
+            "email": str(user_create.email),
+            "password_hash": password_hash,
+            "full_name": user_create.full_name or "",
+        }
+        user = await self.db.create_user(user_data)
+        return user
 
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.secret_key, algorithm=ALGORITHM)
-
-
-async def get_current_user_optional(token: str = Depends(oauth2_scheme)) -> dict | None:
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+    async def authenticate(self, username: str, password: str) -> Optional[Dict[str, Any]]:
+        """Authenticate a user. Returns user dict or None."""
+        user = await self.db.get_user_by_username(username)
+        if user is None:
             return None
-    except JWTError:
-        return None
+        if not verify_password(password, user.get("password_hash", user.get("hashed_password", ""))):
+            return None
+        if not user.get("is_active", True):
+            return None
+        return user
 
-    users_coll = await db.get_user_collection()
-    user = await users_coll.find_one({"username": username})
-    if user:
-        user["id"] = str(user["_id"])
-    return user
+    async def login(self, username: str, password: str) -> Tuple[str, str]:
+        """Authenticate and return token pair. Raises ValueError on failure."""
+        user = await self.authenticate(username, password)
+        if user is None:
+            raise ValueError("Invalid credentials")
+        access, refresh = create_token_pair(user["username"], extra_claims={"uid": user.get("id", user["username"])})
+        return access, refresh
+
+    async def refresh_access_token(self, refresh_token: str) -> str:
+        """Validate refresh token and return new access token."""
+        payload = decode_token(refresh_token)
+        if payload is None:
+            raise ValueError("Invalid or expired refresh token")
+        if payload.get("type") != "refresh":
+            raise ValueError("Invalid token type")
+        username = payload.get("sub")
+        if not username:
+            raise ValueError("Invalid token payload")
+        user = await self.db.get_user_by_username(username)
+        if user is None:
+            raise ValueError("User not found")
+        access = create_token_pair(user["username"], extra_claims={"uid": user.get("id", user["username"])})[0]
+        return access
+
+    async def get_user(self, username: str) -> Optional[Dict[str, Any]]:
+        """Get user by username."""
+        return await self.db.get_user_by_username(username)

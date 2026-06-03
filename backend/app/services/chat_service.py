@@ -1,48 +1,41 @@
-"""Chat service layer — encapsulates MongoDB chat CRUD operations."""
+"""GuardianHealth v2 Chat Service — DynamoDB backend."""
 
-from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from app import db
+from app.db.dynamodb import DynamoDBManager
 
 
 class ChatService:
-    @staticmethod
-    async def list_chats(user_id: str) -> List[dict]:
-        """Return all chats for a user, sorted by last_updated descending."""
-        chats_coll = await db.get_chats_collection()
-        cursor = chats_coll.find({"user_id": user_id}).sort("last_updated", -1)
-        chats = []
-        async for entry in cursor:
-            last_updated = entry.get("last_updated", datetime.utcnow())
-            created_at = entry.get("created_at", last_updated)
-            symptoms = entry.get("symptoms", [])
-            chats.append({
-                "chat_id": entry["chat_id"],
-                "id": entry["chat_id"],
-                "title": entry.get("title", "New Chat"),
-                "last_updated": last_updated,
-                "updated_at": last_updated,
-                "created_at": created_at,
-                "symptoms": symptoms,
-                "symptom_tags": symptoms,
-                "status": entry.get("status", "new"),
-            })
-        return chats
+    """Business logic for chat management."""
 
-    @staticmethod
-    async def get_chat_history(chat_id: str, user_id: str | None = None) -> List[dict]:
-        """Return message history for a chat."""
-        chats_coll = await db.get_chats_collection()
-        query = {"chat_id": chat_id}
-        if user_id:
-            query["user_id"] = user_id
-        chat = await chats_coll.find_one(query)
-        return chat.get("messages", []) if chat else []
+    def __init__(self, db: DynamoDBManager) -> None:
+        self.db = db
 
-    @staticmethod
-    async def delete_chat(chat_id: str, user_id: str) -> bool:
-        """Delete a chat belonging to a user. Returns True if deleted."""
-        chats_coll = await db.get_chats_collection()
-        result = await chats_coll.delete_one({"chat_id": chat_id, "user_id": user_id})
-        return result.deleted_count > 0
+    async def create_chat(
+        self,
+        user_id: Optional[str],
+        title: str,
+        messages: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Create a new chat."""
+        return await self.db.create_chat(user_id, title, messages)
+
+    async def get_chat(self, chat_id: str) -> Optional[Dict[str, Any]]:
+        """Get a chat by ID."""
+        return await self.db.get_chat(chat_id)
+
+    async def list_user_chats(self, user_id: str) -> List[Dict[str, Any]]:
+        """List all chats for a user."""
+        return await self.db.list_chats_by_user(user_id)
+
+    async def update_messages(self, chat_id: str, messages: List[Dict[str, Any]], title: Optional[str] = None) -> None:
+        """Update chat messages."""
+        await self.db.update_chat_messages(chat_id, messages, title)
+
+    async def delete_chat(self, chat_id: str) -> bool:
+        """Delete a chat."""
+        return await self.db.delete_chat(chat_id)
+
+    def is_owner(self, chat: Dict[str, Any], user_id: str) -> bool:
+        """Check if user owns the chat."""
+        return chat.get("user_id") == user_id

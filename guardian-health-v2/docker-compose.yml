@@ -1,0 +1,72 @@
+version: "3.11"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: guardian-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-me}
+      - AWS_REGION=${AWS_REGION:-us-east-1}
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-local}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-local}
+      - DYNAMODB_ENDPOINT_URL=http://dynamodb-local:8000
+      - DYNAMODB_TABLE_PREFIX=${DYNAMODB_TABLE_PREFIX:-guardian-local}
+      - TOGETHER_API_KEY=${TOGETHER_API_KEY:-}
+      - TOGETHER_MODEL=${TOGETHER_MODEL:-meta-llama/Llama-3.3-70B-Instruct-Turbo}
+      - NCBI_EMAIL=${NCBI_EMAIL:-}
+      - NCBI_API_KEY=${NCBI_API_KEY:-}
+      - MOCK_MODE=${MOCK_MODE:-false}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost,http://localhost:80,http://localhost:5173}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      dynamodb-local:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - guardian-net
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: guardian-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - guardian-net
+    restart: unless-stopped
+
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: guardian-dynamodb
+    ports:
+      - "4569:8000"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath /home/dynamodblocal/data"
+    volumes:
+      - dynamodb_data:/home/dynamodblocal/data
+    networks:
+      - guardian-net
+    restart: unless-stopped
+
+volumes:
+  dynamodb_data:
+    driver: local
+
+networks:
+  guardian-net:
+    driver: bridge
+    name: guardian-net
