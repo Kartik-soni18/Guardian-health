@@ -1,0 +1,43 @@
+import { useCallback } from 'react';
+import { useToastStore } from '@/stores/toastStore';
+
+export function useToast() {
+  const addToast = useToastStore((s) => s.addToast);
+  const removeToast = useToastStore((s) => s.removeToast);
+
+  const toast = useCallback(
+    (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration?: number) => {
+      addToast({ message, type, duration });
+    },
+    [addToast]
+  );
+
+  const success = useCallback(
+    (message: string, duration?: number) => toast(message, 'success', duration),
+    [toast]
+  );
+
+  const error = useCallback(
+    (message: string, duration?: number) => toast(message, 'error', duration),
+    [toast]
+  );
+
+  const warning = useCallback(
+    (message: string, duration?: number) => toast(message, 'warning', duration),
+    [toast]
+  );
+
+  const info = useCallback(
+    (message: string, duration?: number) => toast(message, 'info', duration),
+    [toast]
+  );
+
+  return {
+    toast,
+    success,
+    error,
+    warning,
+    info,
+    removeToast,
+  };
+}
