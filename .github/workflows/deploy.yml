@@ -29,7 +29,7 @@ jobs:
       - name: Build
         working-directory: frontend
         env:
-          VITE_API_BASE_URL: https://r5t9bf3p0g.execute-api.ap-southeast-2.amazonaws.com/Stage/
+          VITE_API_URL: ${{ vars.VITE_API_URL || 'https://r5t9bf3p0g.execute-api.ap-southeast-2.amazonaws.com/Stage/api' }}
         run: npm run build
 
       - name: Deploy to GitHub Pages

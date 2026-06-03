@@ -1,0 +1,44 @@
+# =============================================================================
+# GuardianHealth v2 - Prometheus Configuration
+# =============================================================================
+# Scrapes:
+#   - Backend FastAPI metrics endpoint every 15s
+#   - Prometheus self-monitoring
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+
+  # Attach these labels to any time series or alerts
+  external_labels:
+    environment: production
+    service: guardianhealth
+
+scrape_configs:
+  # ---------------------------------------------------------------------------
+  # Backend FastAPI Metrics
+  # ---------------------------------------------------------------------------
+  - job_name: guardian-health
+    static_configs:
+      - targets:
+          - backend:8000
+        labels:
+          service: backend
+          component: api
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s
+
+  # ---------------------------------------------------------------------------
+  # Prometheus Self-Monitoring
+  # ---------------------------------------------------------------------------
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - localhost:9090
+        labels:
+          service: prometheus
+          component: monitoring
+    scrape_interval: 15s
