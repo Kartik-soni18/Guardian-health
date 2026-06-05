@@ -57,14 +57,6 @@ Resources:
       FunctionUrlConfig:
         AuthType: NONE
         InvokeMode: RESPONSE_STREAM
-        Cors:
-          AllowOrigins:
-            - "https://kartik-soni18.github.io"
-            - "http://localhost:5173"
-          AllowMethods:
-            - "*"
-          AllowHeaders:
-            - "*"
 
 Outputs:
   ApiEndpoint:

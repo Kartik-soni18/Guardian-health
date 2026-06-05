@@ -27,28 +27,21 @@ The Vite `base` path is set to `/Guardian-health/` for GitHub Pages project site
 ### Prerequisites
 
 - AWS CLI and SAM CLI
-- ECR repository for the container image
 - MongoDB Atlas cluster
-- Upstash Redis instance
+- Upstash Redis instance (optional)
 - Together.ai API key
 
-### Build and push container
-
-```bash
-aws ecr get-login-password | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.$REGION.amazonaws.com
-
-docker build -t guardian-api -f backend/Dockerfile .
-docker tag guardian-api:latest $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/guardian-api:latest
-docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/guardian-api:latest
-```
+SAM creates and manages the ECR repository automatically when you use `--resolve-image-repos`.
 
 ### Deploy with SAM
 
 ```bash
+sam build --template-file template.yaml
 sam deploy \
   --template-file template.yaml \
   --stack-name guardian-health \
   --capabilities CAPABILITY_IAM \
+  --resolve-image-repos \
   --parameter-overrides \
     SecretKey=... \
     TogetherApiKey=... \
@@ -60,17 +53,17 @@ sam deploy \
 
 ### Lambda runtime
 
-The container runs **uvicorn** via Lambda Web Adapter (`backend/run.sh`) with `AWS_LWA_INVOKE_MODE=response_stream` for SSE streaming. A Lambda Function URL is created for streaming; API Gateway handles all other routes.
+The container runs **uvicorn** via Lambda Web Adapter (`backend/run.sh`) with `AWS_LWA_INVOKE_MODE=response_stream` for SSE streaming. A Lambda Function URL (`InvokeMode: RESPONSE_STREAM`) is the sole API entry point — there is no API Gateway.
 
 For local development, use `uvicorn app.main:app --reload` from the `backend/` directory.
 
 ### CORS
 
-Add your GitHub Pages origin to `ALLOWED_ORIGINS` on the Lambda function. The SAM template passes this via the `AllowedOrigins` parameter.
+Add your GitHub Pages origin to `ALLOWED_ORIGINS` on the Lambda function. The SAM template passes this via the `AllowedOrigins` parameter. FastAPI `CORSMiddleware` is the only layer that sets CORS headers — do not add a `Cors` block to `FunctionUrlConfig` in `template.yaml`.
 
 ## Connecting Frontend to Backend
 
-1. Deploy Lambda and note the API Gateway URL from SAM outputs.
-2. Set `VITE_API_URL` in GitHub repo variables.
+1. Deploy Lambda and note the Function URL from SAM outputs (`ApiEndpoint`).
+2. Set `VITE_API_URL` and `VITE_STREAM_API_URL` in GitHub repo variables (both = Function URL + `/api/v1`).
 3. Re-run the frontend deploy workflow (or push a frontend change).
 4. Verify: open the GitHub Pages site, register/login, submit a triage query.

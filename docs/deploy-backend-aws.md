@@ -1,11 +1,11 @@
 # Deploy Backend to AWS Lambda
 
-Step-by-step guide for GuardianHealth FastAPI on AWS Lambda + API Gateway.
+Step-by-step guide for GuardianHealth FastAPI on AWS Lambda with a Function URL.
 
 ## Architecture
 
 ```
-GitHub Pages frontend  →  API Gateway (HTTP)  →  Lambda (container)  →  MongoDB Atlas + Together.ai
+GitHub Pages frontend  →  Lambda Function URL (RESPONSE_STREAM)  →  uvicorn + Web Adapter  →  MongoDB Atlas + Together.ai
 ```
 
 ## Prerequisites
@@ -34,47 +34,16 @@ For production you can tighten this later with a VPC; for first deploy this is s
 
 ## Step 2 — Choose AWS region
 
-Pick a region close to you and Atlas (e.g. `ap-south-1` Mumbai):
+Pick a region close to you and Atlas (e.g. `ap-southeast-2` Sydney):
 
 ```bash
-export AWS_REGION=ap-south-1
+export AWS_REGION=ap-southeast-2
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 ```
 
-## Step 3 — Create ECR repository (first time only)
+## Step 3 — Build and deploy with SAM
 
-```bash
-aws ecr create-repository \
-  --repository-name guardian-api \
-  --region $AWS_REGION \
-  --image-scanning-configuration scanOnPush=true
-```
-
-## Step 4 — Build and push the Lambda image
-
-From the **project root**:
-
-```bash
-cd "/Users/kartiksoni/Desktop/guardian health"
-
-aws ecr get-login-password --region $AWS_REGION | \
-  docker login --username AWS --password-stdin \
-  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
-
-docker build --platform linux/arm64 \
-  -f backend/Dockerfile.lambda \
-  -t guardian-api .
-
-docker tag guardian-api:latest \
-  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/guardian-api:latest
-
-docker push \
-  $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/guardian-api:latest
-```
-
-> Use `Dockerfile.lambda` (Mangum handler), not `Dockerfile` (uvicorn for docker-compose).
-
-## Step 5 — Deploy with SAM
+SAM builds the container image and pushes to an ECR repo it manages. From the **project root**:
 
 Load values from your root `.env` (do not commit secrets):
 
@@ -83,6 +52,8 @@ export SECRET_KEY="your-secret-from-env"
 export TOGETHER_API_KEY="your-together-key"
 export MONGODB_URI="mongodb+srv://kartik-medical:PASSWORD@cluster0.jzylktb.mongodb.net/?appName=Cluster0"
 export ALLOWED_ORIGINS="https://kartik-soni18.github.io"
+
+sam build --template-file template.yaml
 
 sam deploy \
   --template-file template.yaml \
@@ -101,7 +72,7 @@ sam deploy \
 
 First deploy may take 5–10 minutes.
 
-## Step 6 — Get your API URL
+## Step 4 — Get your Function URL
 
 ```bash
 aws cloudformation describe-stacks \
@@ -114,33 +85,39 @@ aws cloudformation describe-stacks \
 Example output:
 
 ```
-https://abc123xyz.execute-api.ap-south-1.amazonaws.com/prod
+https://abc123xyz.lambda-url.ap-southeast-2.on.aws
 ```
 
 Your frontend API base URL is that value **plus** `/api/v1`:
 
 ```
-https://abc123xyz.execute-api.ap-southeast-2.amazonaws.com/api/v1
+https://abc123xyz.lambda-url.ap-southeast-2.on.aws/api/v1
 ```
 
-> The API uses the `$default` stage — there is no `/prod` prefix in the URL.
-
-## Step 7 — Connect the frontend
+## Step 5 — Connect the frontend
 
 1. GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **Variables**
-2. Add `VITE_API_URL` = `https://YOUR-API.execute-api.REGION.amazonaws.com/prod/api/v1`
-3. Push to `main` or re-run the **Deploy Frontend to GitHub Pages** workflow
+2. Add `VITE_API_URL` = `https://YOUR-FUNCTION-URL.lambda-url.REGION.on.aws/api/v1`
+3. Add `VITE_STREAM_API_URL` = same value
+4. Push to `main` or re-run the **Deploy Frontend to GitHub Pages** workflow
 
-## Step 8 — Verify
+## Step 6 — Verify
 
 ```bash
-# Health check
-curl https://YOUR-API.execute-api.REGION.amazonaws.com/prod/health
+FUNCTION_URL=$(aws cloudformation describe-stacks \
+  --stack-name guardian-health \
+  --region $AWS_REGION \
+  --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+  --output text)
 
-# Register (optional)
-curl -X POST https://YOUR-API.execute-api.REGION.amazonaws.com/prod/api/v1/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"testuser1","email":"test@example.com","password":"TestPass123!","full_name":"Test User"}'
+# Health check
+curl "$FUNCTION_URL/health"
+
+# CORS preflight (should return exactly one Access-Control-Allow-Origin)
+curl -s -D - -o /dev/null -X OPTIONS \
+  -H "Origin: https://kartik-soni18.github.io" \
+  -H "Access-Control-Request-Method: POST" \
+  "$FUNCTION_URL/api/v1/auth/login"
 ```
 
 Then open [https://kartik-soni18.github.io/Guardian-health/](https://kartik-soni18.github.io/Guardian-health/) and test login + triage.
@@ -148,29 +125,20 @@ Then open [https://kartik-soni18.github.io/Guardian-health/](https://kartik-soni
 ## Updating after code changes
 
 ```bash
-# Rebuild and push image
-docker build --platform linux/arm64 -f backend/Dockerfile.lambda -t guardian-api .
-docker tag guardian-api:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/guardian-api:latest
-docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/guardian-api:latest
-
-# Redeploy (same sam deploy command as Step 5)
-sam deploy --template-file template.yaml --stack-name guardian-health ...
-```
-
-Or use SAM build (builds image automatically):
-
-```bash
 sam build --template-file template.yaml
-sam deploy --guided
+sam deploy --template-file template.yaml --stack-name guardian-health \
+  --region $AWS_REGION --capabilities CAPABILITY_IAM --resolve-image-repos \
+  --parameter-overrides SecretKey="$SECRET_KEY" TogetherApiKey="$TOGETHER_API_KEY" ...
 ```
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| `502` from API Gateway | Check CloudWatch Logs for `guardian-api` Lambda |
+| `502` from Function URL | Check CloudWatch Logs for `guardian-api` Lambda |
 | MongoDB connection timeout | Atlas Network Access must include `0.0.0.0/0` |
-| CORS error in browser | `AllowedOrigins` must be `https://kartik-soni18.github.io` (no path) |
+| CORS error: "cannot contain more than one origin" | Remove `Cors` from `FunctionUrlConfig` in `template.yaml`; let FastAPI handle CORS |
+| CORS error: origin blocked | `AllowedOrigins` must be `https://kartik-soni18.github.io` (no path) |
 | Triage fails | Confirm `TOGETHER_API_KEY` is set on Lambda env vars |
 | Cold start slow | Normal for container Lambda (~3–8s first request) |
 
@@ -182,4 +150,4 @@ aws logs tail /aws/lambda/guardian-api --region $AWS_REGION --follow
 
 ## Cost reminder
 
-For light usage, AWS (Lambda + API Gateway + ECR) is typically **~$0/month** within free tier. Main cost is **Together.ai** per triage request.
+For light usage, AWS (Lambda + ECR) is typically **~$0/month** within free tier. Main cost is **Together.ai** per triage request.

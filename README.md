@@ -28,7 +28,7 @@ Copy `.env.example` to `.env` at the project root before running locally.
 - **Database** — MongoDB (auth)
 - **Cache** — Upstash Redis
 - **Data** — Indian Healthcare Symptom-Disease Dataset
-- **Deploy** — AWS Lambda (API) + GitHub Pages (SPA)
+- **Deploy** — AWS Lambda Function URL (streaming) + GitHub Pages (SPA)
 
 ## License
 

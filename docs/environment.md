@@ -29,6 +29,7 @@ All configuration lives in a **single `.env` file at the project root**. Copy `.
 | Variable | Description |
 |---|---|
 | `VITE_API_URL` | Backend base URL including `/api/v1` |
+| `VITE_STREAM_API_URL` | Same as `VITE_API_URL` for SSE streaming (production) |
 
 ### Example values
 
@@ -37,13 +38,14 @@ All configuration lives in a **single `.env` file at the project root**. Copy `.
 VITE_API_URL=http://localhost:8000/api/v1
 ```
 
-**Production (GitHub Pages + Lambda):**
+**Production (GitHub Pages + Lambda Function URL):**
 
 Frontend: [https://kartik-soni18.github.io/Guardian-health/](https://kartik-soni18.github.io/Guardian-health/)
 
 ```
-VITE_API_URL=https://your-api.execute-api.region.amazonaws.com/prod/api/v1
+VITE_API_URL=https://<id>.lambda-url.ap-southeast-2.on.aws/api/v1
+VITE_STREAM_API_URL=https://<id>.lambda-url.ap-southeast-2.on.aws/api/v1
 ALLOWED_ORIGINS=https://kartik-soni18.github.io
 ```
 
-Set `VITE_API_URL` as a GitHub repository variable. CORS uses the origin host only (`https://kartik-soni18.github.io`), not the `/Guardian-health/` path.
+Set `VITE_API_URL` and `VITE_STREAM_API_URL` as GitHub repository variables. CORS uses the origin host only (`https://kartik-soni18.github.io`), not the `/Guardian-health/` path.
