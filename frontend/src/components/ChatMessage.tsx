@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { format } from 'date-fns';
-import { User, Copy, Check, Shield, Sparkles } from 'lucide-react';
+import { User, Copy, Check, Sparkles } from 'lucide-react';
 import { ChatMessage as ChatMessageType } from '@/types';
 import { TriageCard } from './TriageCard';
 
@@ -10,7 +10,7 @@ interface ChatMessageProps {
   isStreaming?: boolean;
 }
 
-export function ChatMessage({ message, isLast, isStreaming }: ChatMessageProps) {
+export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
 
