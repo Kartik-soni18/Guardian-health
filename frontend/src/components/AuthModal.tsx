@@ -1,7 +1,8 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { X, Eye, EyeOff, Loader2, Shield, Lock, User } from 'lucide-react';
+import { X, Eye, EyeOff, Loader2, Shield, Lock, User, Wand2, Copy, Check } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
+import { generateSecurePassword } from '@/lib/password';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ interface FormErrors {
 export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalProps) {
   const [tab, setTab] = useState<'login' | 'register'>(defaultTab);
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordCopied, setPasswordCopied] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [formData, setFormData] = useState<FormData>({
     username: '',
@@ -50,8 +52,32 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     if (isOpen) {
       setErrors({});
       setFormData({ username: '', password: '' });
+      setPasswordCopied(false);
     }
   }, [isOpen, tab]);
+
+  const handleGeneratePassword = () => {
+    const password = generateSecurePassword();
+    setFormData((prev) => ({ ...prev, password }));
+    setShowPassword(true);
+    setPasswordCopied(false);
+  };
+
+  const handleCopyPassword = async () => {
+    if (!formData.password) return;
+    try {
+      await navigator.clipboard.writeText(formData.password);
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = formData.password;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+    }
+    setPasswordCopied(true);
+    setTimeout(() => setPasswordCopied(false), 2000);
+  };
 
   const validatePassword = (password: string, isRegister: boolean): string | undefined => {
     if (!password) return 'Password is required';
@@ -240,6 +266,37 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
               </div>
               {errors.password && (
                 <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.password}</p>
+              )}
+              {tab === 'register' && (
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleGeneratePassword}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+                  >
+                    <Wand2 className="h-3.5 w-3.5" />
+                    Generate password
+                  </button>
+                  {formData.password && (
+                    <button
+                      type="button"
+                      onClick={handleCopyPassword}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 transition-colors hover:bg-primary-100 dark:border-primary-800 dark:bg-primary-950/40 dark:text-primary-300"
+                    >
+                      {passwordCopied ? (
+                        <>
+                          <Check className="h-3.5 w-3.5" />
+                          Copied
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="h-3.5 w-3.5" />
+                          Copy password
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>

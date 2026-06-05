@@ -72,8 +72,9 @@ async def assembler_node(state: TriageState) -> dict:
 
     response_text = state.get("response_text", "")
     triage_result = state.get("triage_result") or {}
+    structured = state.get("structured_response") or {}
     final_routing = state.get("final_routing", "unknown")
-    triage_level = triage_result.get("level")
+    triage_level = structured.get("triage_level") or triage_result.get("level")
 
     audit_payload = {
         "user_id": state.get("user_id"),
@@ -92,6 +93,14 @@ async def assembler_node(state: TriageState) -> dict:
             "triage_level": triage_level,
             "care_setting": triage_result.get("care_setting"),
             "routing": final_routing,
+            "assessment": structured.get("assessment", ""),
+            "what_to_do": structured.get("what_to_do", []),
+            "what_not_to_do": structured.get("what_not_to_do", []),
+            "likely_conditions": structured.get("likely_conditions", []),
+            "red_flags": structured.get("red_flags", []),
+            "reasoning": structured.get("reasoning", state.get("ml_reasoning", "")),
+            "confidence": structured.get("confidence", state.get("reasoning_confidence", 0.0)),
+            "dataset_used": structured.get("dataset_used", False),
             "reasoning_confidence": state.get("reasoning_confidence", 0.0),
             "compliance_passed": state.get("compliance_passed", True),
             "metadata": {

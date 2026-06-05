@@ -33,6 +33,7 @@ def _build_context(
     ml_prediction: dict[str, Any] | None = None,
     top_predictions: list[dict] | None = None,
     ml_confidence: float = 0.0,
+    scratchpad: dict[str, Any] | None = None,
 ) -> str:
     """Build compact context for LLM prompts."""
     lines = [f"Query: {scrubbed}"]
@@ -66,6 +67,16 @@ def _build_context(
             for m in matches[:2]
         )
         lines.append(f"Regional data: {refs}")
+
+    if scratchpad:
+        if scratchpad.get("observations"):
+            lines.append(f"Clinical notes: {scratchpad['observations'][:200]}")
+        diffs = scratchpad.get("differentials") or []
+        if diffs:
+            lines.append(f"Differentials: {', '.join(str(d) for d in diffs[:3])}")
+
+    if ml_confidence < 0.5:
+        lines.append("Dataset confidence is LOW — use clinical reasoning to infer likely conditions.")
 
     return "\n".join(lines)
 
@@ -126,6 +137,8 @@ async def consult(
     top_predictions: list[dict],
     ml_confidence: float,
     llm: AsyncLLMClient,
+    clinical_entities: dict[str, Any] | None = None,
+    scratchpad: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Provide a full clinical consultation.
@@ -157,8 +170,10 @@ async def consult(
     context = _build_context(
         scrubbed=scrubbed,
         history=history,
+        clinical_entities=clinical_entities,
         top_predictions=top_predictions,
         ml_confidence=ml_confidence,
+        scratchpad=scratchpad,
     )
 
     try:
@@ -190,6 +205,7 @@ async def analyze(
     clinical_entities: dict[str, Any],
     ml_prediction: dict[str, Any] | None,
     llm: AsyncLLMClient,
+    scratchpad: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Analyze and assign triage level.
@@ -226,6 +242,7 @@ async def analyze(
         ml_prediction=ml_prediction,
         top_predictions=top_predictions,
         ml_confidence=ml_confidence,
+        scratchpad=scratchpad,
     )
 
     try:

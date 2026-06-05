@@ -33,12 +33,17 @@ export interface TriageResponse {
   id: string;
   severity: 'emergency' | 'urgent' | 'self-care' | 'unknown';
   summary: string;
+  assessment: string;
   reasoning: string;
+  whatToDo: string[];
+  whatNotToDo: string[];
+  likelyConditions: string[];
   redFlags: string[];
   remedies: string[];
   followUp: string;
   symptoms: string[];
   confidence: number;
+  datasetUsed: boolean;
   createdAt: string;
   disclaimer: string;
 }

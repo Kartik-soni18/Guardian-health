@@ -66,7 +66,7 @@ export function useChat() {
           id: crypto.randomUUID(),
           chatId,
           role: 'assistant',
-          content: triage.summary,
+          content: triage.assessment || triage.summary,
           triage,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),

@@ -1,6 +1,6 @@
 """Triage API schemas."""
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -24,7 +24,14 @@ class TriageResponse(BaseModel):
     triage_level: Optional[str] = None
     routing: str = "unknown"
     symptoms: List[str] = Field(default_factory=list)
+    assessment: str = ""
     reasoning: str = ""
+    what_to_do: List[str] = Field(default_factory=list)
+    what_not_to_do: List[str] = Field(default_factory=list)
+    likely_conditions: List[str] = Field(default_factory=list)
+    red_flags: List[str] = Field(default_factory=list)
+    confidence: float = 0.0
+    dataset_used: bool = False
     compliance_passed: bool = True
     audit_hash: Optional[str] = None
     disclaimer: str = (

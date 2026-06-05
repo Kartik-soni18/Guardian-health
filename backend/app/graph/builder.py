@@ -29,8 +29,10 @@ def route_after_reasoner(state: TriageState) -> str:
     if state.get("is_emergency"):
         return "emergency"
 
-    confidence = state.get("reasoning_confidence", 0.5)
+    ml_confidence = float(state.get("ml_confidence", 0.0))
+    reasoning_confidence = float(state.get("reasoning_confidence", 0.5))
     symptoms = state.get("symptoms", [])
+    dataset_matches = state.get("dataset_matches") or []
     user_input = state.get("user_input", "").lower()
 
     disease_info_keywords = [
@@ -39,10 +41,17 @@ def route_after_reasoner(state: TriageState) -> str:
     ]
     is_disease_query = any(kw in user_input for kw in disease_info_keywords) and len(symptoms) <= 1
 
-    if is_disease_query and confidence < 0.6:
+    if is_disease_query and ml_confidence < 0.5:
         return "disease_info"
-    if confidence >= 0.6 and symptoms:
+
+    # Strong dataset match — use triage path with dataset-backed predictions
+    if ml_confidence >= 0.5 and dataset_matches and symptoms:
         return "triage"
+
+    # Weak dataset match — rely on LLM clinical reasoning
+    if symptoms or reasoning_confidence >= 0.3:
+        return "consultation"
+
     return "consultation"
 
 

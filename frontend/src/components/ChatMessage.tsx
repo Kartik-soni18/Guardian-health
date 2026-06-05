@@ -64,17 +64,18 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
             )}
           </div>
 
-          {/* Message Body */}
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-              {message.content}
-              {isStreaming && (
-                <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary-500" />
-              )}
+          {/* Message Body — hide raw text when structured triage card is shown */}
+          {!message.triage && (
+            <div className="prose prose-sm max-w-none dark:prose-invert">
+              <div className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700 dark:text-gray-300">
+                {message.content}
+                {isStreaming && (
+                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-primary-500" />
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Triage Card (if embedded in message) */}
           {message.triage && (
             <div className="mt-4">
               <TriageCard triage={message.triage} />

@@ -12,7 +12,14 @@ interface BackendTriageResponse {
   triage_level?: string | null;
   routing: string;
   symptoms: string[];
+  assessment: string;
   reasoning: string;
+  what_to_do: string[];
+  what_not_to_do: string[];
+  likely_conditions: string[];
+  red_flags: string[];
+  confidence: number;
+  dataset_used: boolean;
   compliance_passed: boolean;
   audit_hash?: string | null;
   disclaimer: string;
@@ -34,16 +41,22 @@ function mapSeverity(level?: string | null): TriageResponse['severity'] {
 }
 
 function mapTriageResponse(data: BackendTriageResponse): TriageResponse {
+  const assessment = data.assessment || data.response;
   return {
     id: data.audit_hash || crypto.randomUUID(),
     severity: mapSeverity(data.triage_level),
-    summary: data.response,
+    summary: assessment,
+    assessment,
     reasoning: data.reasoning,
-    redFlags: [],
-    remedies: [],
+    whatToDo: data.what_to_do || [],
+    whatNotToDo: data.what_not_to_do || [],
+    likelyConditions: data.likely_conditions || [],
+    redFlags: data.red_flags || [],
+    remedies: data.what_to_do || [],
     followUp: data.routing,
     symptoms: data.symptoms,
-    confidence: data.compliance_passed ? 0.8 : 0.5,
+    confidence: data.confidence || (data.compliance_passed ? 0.7 : 0.4),
+    datasetUsed: data.dataset_used,
     createdAt: new Date().toISOString(),
     disclaimer: data.disclaimer,
   };
