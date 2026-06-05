@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'frontend/**'
+      - '.github/workflows/deploy.yml'
 
 permissions:
   contents: write
@@ -29,6 +30,7 @@ jobs:
       - name: Build
         working-directory: frontend
         env:
+          VITE_MAINTENANCE_MODE: 'true'
           VITE_API_URL: ${{ vars.VITE_API_URL || 'https://r5t9bf3p0g.execute-api.ap-southeast-2.amazonaws.com/Stage/api' }}
         run: npm run build
 
