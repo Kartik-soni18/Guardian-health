@@ -53,21 +53,40 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     }
   }, [isOpen, tab]);
 
+  const validatePassword = (password: string, isRegister: boolean): string | undefined => {
+    if (!password) return 'Password is required';
+    if (password.length < 8) return 'Password must be at least 8 characters';
+    if (!isRegister) return undefined;
+
+    const issues: string[] = [];
+    if (!/[A-Z]/.test(password)) issues.push('one uppercase letter');
+    if (!/[a-z]/.test(password)) issues.push('one lowercase letter');
+    if (!/[0-9]/.test(password)) issues.push('one number');
+    if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~ ]/.test(password)) {
+      issues.push('one special character');
+    }
+    if (issues.length > 0) {
+      return `Password must include ${issues.join(', ')}`;
+    }
+    return undefined;
+  };
+
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
 
     if (!formData.username) {
       newErrors.username = 'Username is required';
-    } else if (formData.username.length < 3) {
-      newErrors.username = 'Username must be at least 3 characters';
+    } else if (formData.username.length < 3 || formData.username.length > 50) {
+      newErrors.username = 'Username must be 3–50 characters';
+    } else if (formData.username.startsWith('_') || formData.username.endsWith('_')) {
+      newErrors.username = 'Username cannot start or end with an underscore';
     } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
       newErrors.username = 'Username can only contain letters, numbers, and underscores';
     }
 
-    if (!formData.password) {
-      newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
+    const passwordError = validatePassword(formData.password, tab === 'register');
+    if (passwordError) {
+      newErrors.password = passwordError;
     }
 
     setErrors(newErrors);
@@ -204,7 +223,11 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                       ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 dark:border-red-700 dark:focus:border-red-500 dark:focus:ring-red-900'
                       : 'border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-700 dark:focus:border-primary-400 dark:focus:ring-primary-900'
                   )}
-                  placeholder="Min. 8 characters"
+                  placeholder={
+                    tab === 'register'
+                      ? 'Min. 8 chars, upper, lower, number, symbol'
+                      : 'Your password'
+                  }
                   autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
                 />
                 <button

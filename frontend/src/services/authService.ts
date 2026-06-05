@@ -1,5 +1,9 @@
 import { api } from './api';
+import { parseApiError } from '@/lib/utils';
 import { LoginCredentials, RegisterData, TokenResponse, User } from '@/types';
+function wrapAuthError(error: unknown, fallback: string): Error {
+  return new Error(parseApiError(error, fallback));
+}
 
 interface BackendTokenResponse {
   access_token: string;
@@ -37,19 +41,27 @@ function mapTokenResponse(data: BackendTokenResponse): TokenResponse & { user: U
 
 export const authService = {
   async login(credentials: LoginCredentials): Promise<TokenResponse & { user: User }> {
-    const response = await api.post<BackendTokenResponse>('/auth/login', {
-      username: credentials.username,
-      password: credentials.password,
-    });
-    return mapTokenResponse(response.data);
+    try {
+      const response = await api.post<BackendTokenResponse>('/auth/login', {
+        username: credentials.username,
+        password: credentials.password,
+      });
+      return mapTokenResponse(response.data);
+    } catch (error) {
+      throw wrapAuthError(error, 'Login failed');
+    }
   },
 
   async register(data: RegisterData): Promise<TokenResponse & { user: User }> {
-    const response = await api.post<BackendTokenResponse>('/auth/register', {
-      username: data.username,
-      password: data.password,
-    });
-    return mapTokenResponse(response.data);
+    try {
+      const response = await api.post<BackendTokenResponse>('/auth/register', {
+        username: data.username,
+        password: data.password,
+      });
+      return mapTokenResponse(response.data);
+    } catch (error) {
+      throw wrapAuthError(error, 'Registration failed');
+    }
   },
 
   async refreshToken(token: string): Promise<TokenResponse> {

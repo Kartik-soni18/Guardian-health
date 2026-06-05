@@ -103,7 +103,7 @@ def validate_password(password: str) -> str:
     """Validate password strength.
 
     Rules:
-        - Minimum 12 characters
+        - Minimum 8 characters
         - At least 1 uppercase letter
         - At least 1 lowercase letter
         - At least 1 digit
@@ -115,9 +115,9 @@ def validate_password(password: str) -> str:
     if not password:
         raise ValidationError("Password is required.", extra={"field": "password"})
 
-    if len(password) < 12:
+    if len(password) < 8:
         raise ValidationError(
-            "Password must be at least 12 characters long.",
+            "Password must be at least 8 characters long.",
             extra={"field": "password", "received_length": len(password)},
         )
 
