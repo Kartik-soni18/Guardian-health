@@ -1,17 +1,21 @@
-/** GitHub Pages base path — must match vite.config.ts `base`. */
-export const routerBasename = import.meta.env.BASE_URL.replace(/\/$/, '') || undefined;
+/** GitHub Pages project path — must match vite.config.ts `base`. */
+export const GH_PAGES_BASE = '/Guardian-health';
 
-/** Build an in-app URL that respects the GitHub Pages base path. */
-export function appUrl(path = '/'): string {
-  const normalized = path.startsWith('/') ? path : `/${path}`;
-  const base = import.meta.env.BASE_URL;
-  if (!base || base === '/') {
-    return normalized;
-  }
-  return `${base.replace(/\/$/, '')}${normalized}`;
+/** App entry URL with hash routing (safe for GitHub Pages + Safari reload). */
+export function appHomeUrl(): string {
+  const base = import.meta.env.BASE_URL || `/${GH_PAGES_BASE}/`;
+  return `${base}#/`;
 }
 
-/** Navigate to the app home (not the GitHub user root). */
+/** Navigate to app home without leaving the project path. */
 export function goToAppHome(): void {
-  window.location.href = appUrl('/');
+  window.location.href = appHomeUrl();
+}
+
+/** Ensure the browser path stays under the GitHub Pages project directory. */
+export function ensureProjectPath(): void {
+  const path = window.location.pathname;
+  if (!path.startsWith(GH_PAGES_BASE)) {
+    window.location.replace(`${GH_PAGES_BASE}/`);
+  }
 }

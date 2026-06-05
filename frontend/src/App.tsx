@@ -5,6 +5,7 @@ import { ToastContainer } from '@/components/ToastContainer';
 import { HomePage } from '@/pages/HomePage';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
+import { ensureProjectPath } from '@/lib/routes';
 
 export function App() {
   const { initAuth } = useAuth();
@@ -23,6 +24,7 @@ export function App() {
   }, [toast]);
 
   useEffect(() => {
+    ensureProjectPath();
     initAuth();
   }, [initAuth]);
 
