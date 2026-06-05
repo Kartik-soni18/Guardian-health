@@ -162,7 +162,6 @@ async def consult(
             "key_concerns": [],
             "plan": "Please consult a healthcare provider directly.",
             "when_to_seek": "If you feel your condition is urgent, seek immediate care.",
-            "disclaimer": "This is not medical advice. Consult a healthcare professional.",
             "references": [],
             "follow_up_questions": ["Can you describe your symptoms in more detail?"],
         }
@@ -192,7 +191,6 @@ async def consult(
             "key_concerns": [p.get("condition", "unknown") for p in top_predictions[:3]],
             "plan": "Please consult a healthcare provider for personalized advice.",
             "when_to_seek": "Seek immediate care for severe or worsening symptoms.",
-            "disclaimer": "This is not medical advice. Consult a healthcare professional.",
             "references": [],
             "follow_up_questions": ["Can you describe your main symptom?", "How long have you had these symptoms?"],
             "heuristic": True,

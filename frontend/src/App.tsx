@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
+import { Footer } from '@/components/Footer';
 import { ToastContainer } from '@/components/ToastContainer';
 import { HomePage } from '@/pages/HomePage';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,10 +30,10 @@ export function App() {
   }, [initAuth]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-gray-900 transition-colors dark:bg-gray-950 dark:text-gray-100">
+    <div className="flex h-screen flex-col overflow-hidden bg-white text-gray-900 transition-colors dark:bg-gray-950 dark:text-gray-100">
       <Header />
 
-      <main className="flex-1">
+      <main className="flex min-h-0 flex-1 flex-col">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/chat" element={<Navigate to="/" replace />} />
@@ -41,6 +42,7 @@ export function App() {
         </Routes>
       </main>
 
+      <Footer />
       <ToastContainer />
     </div>
   );

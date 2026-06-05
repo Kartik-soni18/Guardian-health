@@ -4,8 +4,9 @@ Compliance Reviewer — Post-processes triage output for safety compliance.
 Checks for:
 - Definitive diagnosis language
 - Specific drug/dosage recommendations
-- Required disclaimer presence
 - Unsafe self-treatment advice
+
+Disclaimers are shown once in the app footer — do not append them to LLM responses.
 """
 
 
@@ -33,15 +34,6 @@ DRUG_DOSAGE_PATTERNS = [
     re.compile(r"\bprescrib(?:e|ing|ed)\b", re.IGNORECASE),
     re.compile(r"\bdosage:\s*\d+", re.IGNORECASE),
     re.compile(r"\btake\s+(?:one|two|three|1|2|3)\s+(?:pill|tablet|capsule)", re.IGNORECASE),
-]
-
-DISCLAIMER_PATTERNS = [
-    re.compile(r"not (?:a )?medical (?:advice|diagnosis)", re.IGNORECASE),
-    re.compile(r"consult (?:a |your )?(?:healthcare|medical|doctor|physician)", re.IGNORECASE),
-    re.compile(r"(?:educational|informational) purposes only", re.IGNORECASE),
-    re.compile(r"does not replace professional medical advice", re.IGNORECASE),
-    re.compile(r"seek (?:professional|medical) advice", re.IGNORECASE),
-    re.compile(r"(?:health care|healthcare) (?:provider|professional)", re.IGNORECASE),
 ]
 
 SELF_TREATMENT_PATTERNS = [
@@ -124,10 +116,6 @@ def compliance_review(triage_result: dict[str, Any]) -> dict[str, Any]:
         violations.append(f"Specific drug/dosage recommendation detected: {drug_matches}")
         modifications.append("Removed specific dosing; added consult-provider warning.")
 
-    # Check for disclaimer presence
-    disclaimer_matches = _check_patterns(response_text, DISCLAIMER_PATTERNS)
-    has_disclaimer = len(disclaimer_matches) >= 1
-
     # Check for unsafe self-treatment advice
     self_tx_matches = _check_patterns(response_text, SELF_TREATMENT_PATTERNS)
     if self_tx_matches:
@@ -163,14 +151,6 @@ def compliance_review(triage_result: dict[str, Any]) -> dict[str, Any]:
         final_response += (
             "\n\nAlways consult with your healthcare provider before starting, stopping, or changing any medication."
         )
-
-    if not has_disclaimer:
-        final_response += (
-            "\n\nDisclaimer: This information is for educational purposes only and is not a substitute "
-            "for professional medical advice, diagnosis, or treatment. Always seek the advice of your "
-            "physician or other qualified health provider with any questions you may have regarding a medical condition."
-        )
-        modifications.append("Added required medical disclaimer.")
 
     if self_tx_matches and approved:
         final_response = final_response.replace(

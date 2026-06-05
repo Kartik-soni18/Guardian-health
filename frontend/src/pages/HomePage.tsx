@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useChat } from '@/hooks/useChat';
 import { useToast } from '@/hooks/useToast';
@@ -58,7 +57,7 @@ export function HomePage() {
   );
 
   return (
-    <div className="flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-gray-50 dark:bg-gray-950">
       <div className="flex flex-1 overflow-hidden">
         <ChatSidebar
           chats={chats}
@@ -80,17 +79,6 @@ export function HomePage() {
             onStartChat={handleStartChat}
             chatId={currentChatId}
           />
-        </div>
-      </div>
-
-      <div className="shrink-0 border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
-        <div className="mx-auto flex max-w-3xl items-start gap-2 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
-          <p>
-            GuardianHealth is an AI triage tool for general health information only. It is not a
-            substitute for professional medical advice, diagnosis, or treatment. For emergencies,
-            call 911 or your local emergency services.
-          </p>
         </div>
       </div>
 

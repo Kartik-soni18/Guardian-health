@@ -191,8 +191,8 @@ async def emergency_node(state: TriageState) -> dict:
         "triage_level": "emergent",
         "assessment": f"{emergency_type.title()} — immediate emergency care required.",
         "what_to_do": [
-            "Call emergency services (911 / 112 / 999) or go to the nearest ER now.",
-            "If mental health crisis: 988 Suicide & Crisis Lifeline (US).",
+            "Go to the nearest hospital emergency department immediately.",
+            "Contact local emergency services (e.g. 102/108 in India) if you need urgent transport.",
         ],
         "what_not_to_do": [
             "Do not drive yourself if you have severe symptoms.",

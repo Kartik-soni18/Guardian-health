@@ -47,7 +47,6 @@ MOCK_RESPONSES: dict[str, str] = {
     "consultation": json.dumps({
         "assessment": "Likely benign headache.",
         "plan": "Rest, hydration, OTC analgesics.",
-        "disclaimer": "Not a diagnosis.",
         "references": [],
     }),
     "triage": json.dumps({

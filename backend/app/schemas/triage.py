@@ -34,7 +34,4 @@ class TriageResponse(BaseModel):
     dataset_used: bool = False
     compliance_passed: bool = True
     audit_hash: Optional[str] = None
-    disclaimer: str = (
-        "This information is for educational purposes only and does not "
-        "constitute medical advice. Seek professional care for medical concerns."
-    )
+    disclaimer: str = ""

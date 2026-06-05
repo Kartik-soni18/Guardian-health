@@ -34,7 +34,7 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
 
   return (
     <div
-      className={`group animate-fade-in ${isUser ? 'bg-transparent' : 'bg-gray-50/50 dark:bg-gray-900/30'}`}
+      className={`group animate-fade-in ${isUser ? 'bg-transparent' : 'bg-white/60 dark:bg-gray-900/40'}`}
     >
       <div className="mx-auto flex max-w-3xl gap-4 px-4 py-5 sm:px-6">
         {/* Avatar */}

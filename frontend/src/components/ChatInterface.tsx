@@ -70,16 +70,16 @@ export function ChatInterface({
       >
         {!hasMessages && !isLoading ? (
           /* Empty State */
-          <div className="flex h-full flex-col items-center justify-center px-4">
-            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-100 dark:bg-primary-950">
-              <Sparkles className="h-8 w-8 text-primary-600 dark:text-primary-400" />
+          <div className="flex h-full flex-col items-center justify-center px-4 py-8">
+            <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 shadow-lg shadow-primary-500/20">
+              <Sparkles className="h-8 w-8 text-white" />
             </div>
-            <h2 className="mb-2 text-xl font-semibold text-gray-900 dark:text-white">
+            <h2 className="mb-2 text-2xl font-semibold tracking-tight text-gray-900 dark:text-white">
               How can I help you today?
             </h2>
-            <p className="mb-8 max-w-md text-center text-sm text-gray-500 dark:text-gray-400">
-              Describe your symptoms, ask health questions, or share concerns.
-              I will help assess your condition and guide you to the right care.
+            <p className="mb-8 max-w-md text-center text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+              Describe your symptoms or health concerns and I&apos;ll help assess your
+              condition and suggest next steps.
             </p>
 
             {/* Suggested Prompts */}
@@ -90,7 +90,7 @@ export function ChatInterface({
                   <button
                     key={prompt.text}
                     onClick={() => handleSend(prompt.text)}
-                    className="group flex items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-all hover:border-primary-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900 dark:hover:border-primary-700"
+                    className="group flex items-center gap-3 rounded-xl border border-gray-200/80 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary-300 hover:shadow-md dark:border-gray-800 dark:bg-gray-900/80 dark:hover:border-primary-700"
                   >
                     <Icon className="h-5 w-5 shrink-0 text-primary-500" />
                     <span className="text-sm text-gray-700 group-hover:text-gray-900 dark:text-gray-300 dark:group-hover:text-white">
@@ -181,17 +181,13 @@ export function ChatInterface({
       </div>
 
       {/* Input Area */}
-      <div className="border-t border-gray-200 bg-white px-4 py-4 dark:border-gray-800 dark:bg-gray-950">
+      <div className="border-t border-gray-200/80 bg-white/90 px-4 py-4 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-950/90">
         <div className="mx-auto max-w-3xl">
           <SymptomInput
             onSend={handleSend}
             isLoading={isLoading || isStreaming}
             placeholder="Describe your symptoms or ask a question..."
           />
-          <p className="mt-2 text-center text-xs text-gray-400 dark:text-gray-600">
-            GuardianHealth provides general health information, not medical advice.
-            In an emergency, call 911.
-          </p>
         </div>
       </div>
     </div>

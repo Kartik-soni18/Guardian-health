@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { TriageResponse } from '@/types';
 import { cn } from '@/lib/utils';
-import { EmergencyAlert } from './EmergencyAlert';
 
 interface TriageCardProps {
   triage: TriageResponse;
@@ -62,13 +61,6 @@ export function TriageCard({ triage }: TriageCardProps) {
 
   return (
     <div className="animate-fade-in">
-      {triage.severity === 'emergency' && (
-        <EmergencyAlert
-          message="This appears to be a medical emergency. Call 911 immediately."
-          onCall911={() => (window.location.href = 'tel:911')}
-        />
-      )}
-
       <div
         className={cn(
           'overflow-hidden rounded-2xl border bg-white shadow-sm dark:bg-gray-900',
@@ -201,13 +193,6 @@ export function TriageCard({ triage }: TriageCardProps) {
               </ul>
             </div>
           )}
-
-          <div className="flex items-start gap-2 rounded-lg bg-gray-50 p-3 dark:bg-gray-800/50">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" />
-            <p className="text-xs leading-relaxed text-gray-500 dark:text-gray-500">
-              {triage.disclaimer}
-            </p>
-          </div>
         </div>
       </div>
     </div>

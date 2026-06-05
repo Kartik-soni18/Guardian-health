@@ -35,13 +35,10 @@ async def compliance_node(state: TriageState) -> dict:
         }
     except Exception as exc:
         logger.error("Compliance node error: %s", exc)
-        safe_response = response_text + (
-            "\n\nDisclaimer: This is educational information only, not medical advice."
-        )
         return {
             "compliance_passed": True,
             "compliance_note": f"Compliance review failed: {type(exc).__name__}",
-            "response_text": safe_response,
+            "response_text": response_text,
         }
 
 
