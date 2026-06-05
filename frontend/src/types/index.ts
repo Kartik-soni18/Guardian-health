@@ -37,6 +37,22 @@ export type TriageLevel =
   | 'level_5'
   | 'unknown';
 
+export interface PartialTriageResponse {
+  responseMode?: 'follow_up' | 'triage_report';
+  triageLevel?: TriageLevel;
+  levelTitle?: string;
+  levelJustification?: string;
+  assessment?: string;
+  preliminaryAssessment?: string;
+  immediateActions?: string[];
+  crucialWarnings?: string[];
+  resourceRecommendations?: string[];
+  requiredFollowUp?: string[];
+  likelyConditions?: string[];
+  followUpQuestions?: string[];
+  assumptions?: string[];
+}
+
 export interface TriageResponse {
   id: string;
   triageLevel: TriageLevel;

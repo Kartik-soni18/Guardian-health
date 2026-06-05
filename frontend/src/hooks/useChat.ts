@@ -18,6 +18,7 @@ export function useChat() {
     isLoading,
     isStreaming,
     streamingContent,
+    streamingTriage,
     error,
     addChat,
     removeChat,
@@ -27,8 +28,9 @@ export function useChat() {
     statusMessage,
     setIsStreaming,
     setStreamingContent,
+    setStreamingTriage,
     setStatusMessage,
-    appendStreamingContent,
+    mergeStreamingTriage,
     setError,
     clearStreaming,
   } = useChatStore();
@@ -56,6 +58,7 @@ export function useChat() {
       addMessage(userMessage);
       setIsStreaming(true);
       setStreamingContent('');
+      setStreamingTriage(null);
       setStatusMessage('');
 
       const history = [...messages, userMessage];
@@ -80,7 +83,7 @@ export function useChat() {
           request,
           {
             onStatus: setStatusMessage,
-            onChunk: appendStreamingContent,
+            onPartial: mergeStreamingTriage,
           },
           options
         );
@@ -109,13 +112,14 @@ export function useChat() {
     },
     [
       addMessage,
-      appendStreamingContent,
       clearStreaming,
+      mergeStreamingTriage,
       messages,
       setError,
       setIsStreaming,
       setStatusMessage,
       setStreamingContent,
+      setStreamingTriage,
     ]
   );
 
@@ -149,6 +153,7 @@ export function useChat() {
     isLoading,
     isStreaming,
     streamingContent,
+    streamingTriage,
     statusMessage,
     error,
     loadChat,

@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from app.graph import get_triage_graph, reset_graph
 from app.graph.state import TriageState
 from app.graph.stream_context import reset_stream_emit, set_stream_emit
-from app.graph.streaming import NODE_STATUS_MESSAGES, chunk_text
+from app.graph.streaming import NODE_STATUS_MESSAGES
 from app.schemas.triage import TriageRequest, TriageResponse
 
 logger = logging.getLogger("guardian.triage_service")
@@ -35,16 +35,11 @@ class TriageService:
         graph = get_triage_graph()
         state = self._initial_state(request, user_id)
         queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
-        tokens_emitted = False
 
         async def emit(event: dict[str, Any]) -> None:
-            nonlocal tokens_emitted
-            if event.get("type") == "token":
-                tokens_emitted = True
             await queue.put(event)
 
         async def run_graph() -> None:
-            nonlocal tokens_emitted
             ctx_token = set_stream_emit(emit)
             merged: Dict[str, Any] = dict(state)
             try:
@@ -59,12 +54,6 @@ class TriageService:
                         await queue.put({"type": "status", "message": message})
 
                 response = self._build_response(merged)
-                if not tokens_emitted:
-                    text = response.response or response.assessment
-                    if text:
-                        async for chunk in chunk_text(text):
-                            await queue.put({"type": "token", "chunk": chunk})
-
                 await queue.put({
                     "type": "done",
                     "triage": response.model_dump(),

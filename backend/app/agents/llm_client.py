@@ -17,6 +17,7 @@ from tenacity import (
 )
 
 from app.config import get_settings
+from app.graph.partial_json import OnPartial, PartialJSONAccumulator
 
 logger = logging.getLogger("guardian.llm")
 
@@ -238,23 +239,6 @@ class AsyncLLMClient:
             logger.error("LLM STREAM FAILED node=%s error=%s", node_type, exc)
             raise
 
-    async def collect_stream(
-        self,
-        system_prompt: str,
-        user_content: str,
-        node_type: str,
-        max_tokens: int = 1024,
-    ) -> str:
-        parts: list[str] = []
-        async for token in self.stream_tokens(
-            system_prompt,
-            user_content,
-            node_type,
-            max_tokens=max_tokens,
-        ):
-            parts.append(token)
-        return "".join(parts)
-
     def _parse_json_raw(self, raw: str) -> dict[str, Any]:
         try:
             return json.loads(raw)
@@ -274,17 +258,20 @@ class AsyncLLMClient:
         raw = await self.call(system_prompt, user_content, node_type, max_tokens)
         return self._parse_json_raw(raw)
 
-    async def parse_json_stream(
+    async def parse_json_incremental(
         self,
         system_prompt: str,
         user_content: str,
         node_type: str,
         max_tokens: int = 1024,
+        on_partial: OnPartial | None = None,
     ) -> dict[str, Any]:
-        raw = await self.collect_stream(
+        accumulator = PartialJSONAccumulator(on_partial=on_partial)
+        async for token in self.stream_tokens(
             system_prompt,
             user_content,
             node_type,
             max_tokens=max_tokens,
-        )
-        return self._parse_json_raw(raw)
+        ):
+            await accumulator.feed(token)
+        return accumulator.finalize(self._parse_json_raw)

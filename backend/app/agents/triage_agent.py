@@ -8,9 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from app.agents.llm_client import AsyncLLMClient
-from app.graph.response_builder import format_follow_up, format_triage_report
 from app.graph.stream_context import get_stream_emit
-from app.graph.streaming import emit_text_chunks
 from app.models.enums import TriageLevel
 
 logger = logging.getLogger("guardian.triage")
@@ -242,24 +240,18 @@ async def _run_llm_json(
     final_nodes = {"consultation", "triage", "disease_info"}
 
     if emit and node_type in final_nodes:
-        status = emit({"type": "status", "message": "Writing your response..."})
-        if asyncio.iscoroutine(status):
-            await status
-        result = await llm.parse_json_stream(
+        async def on_partial(fields: dict[str, Any]) -> None:
+            event = emit({"type": "partial", "data": fields})
+            if asyncio.iscoroutine(event):
+                await event
+
+        return await llm.parse_json_incremental(
             system_prompt=system_prompt,
             user_content=user_content,
             node_type=node_type,
             max_tokens=max_tokens,
+            on_partial=on_partial,
         )
-        mode = (result.get("response_mode") or "triage_report").lower()
-        if mode == "follow_up":
-            visible = format_follow_up(result)
-        elif node_type == "disease_info":
-            visible = result.get("description") or f"Information about {result.get('condition', 'this condition')}."
-        else:
-            visible = format_triage_report(result)
-        await emit_text_chunks(emit, visible)
-        return result
 
     return await llm.parse_json(
         system_prompt=system_prompt,

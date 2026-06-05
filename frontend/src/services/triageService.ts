@@ -1,6 +1,12 @@
 import { api } from './api';
 import { useAuthStore } from '@/stores/authStore';
-import { ChatMessage, TriageLevel, TriageRequest, TriageResponse } from '@/types';
+import {
+  ChatMessage,
+  PartialTriageResponse,
+  TriageLevel,
+  TriageRequest,
+  TriageResponse,
+} from '@/types';
 
 interface BackendTriageRequest {
   query: string;
@@ -135,9 +141,50 @@ function getApiBaseUrl(): string {
   return import.meta.env.VITE_API_URL || '/api/v1';
 }
 
+function mapPartialTriage(data: Record<string, unknown>): PartialTriageResponse {
+  const mode = data.response_mode;
+  return {
+    responseMode:
+      mode === 'follow_up' || mode === 'triage_report' ? mode : undefined,
+    triageLevel:
+      typeof data.triage_level === 'string'
+        ? mapTriageLevel(data.triage_level)
+        : undefined,
+    levelTitle: typeof data.level_title === 'string' ? data.level_title : undefined,
+    levelJustification:
+      typeof data.level_justification === 'string' ? data.level_justification : undefined,
+    assessment: typeof data.assessment === 'string' ? data.assessment : undefined,
+    preliminaryAssessment:
+      typeof data.preliminary_assessment === 'string'
+        ? data.preliminary_assessment
+        : undefined,
+    immediateActions: Array.isArray(data.immediate_actions)
+      ? data.immediate_actions.map(String)
+      : undefined,
+    crucialWarnings: Array.isArray(data.crucial_warnings)
+      ? data.crucial_warnings.map(String)
+      : undefined,
+    resourceRecommendations: Array.isArray(data.resource_recommendations)
+      ? data.resource_recommendations.map(String)
+      : undefined,
+    requiredFollowUp: Array.isArray(data.required_follow_up)
+      ? data.required_follow_up.map(String)
+      : undefined,
+    likelyConditions: Array.isArray(data.likely_conditions)
+      ? data.likely_conditions.map(String)
+      : undefined,
+    followUpQuestions: Array.isArray(data.follow_up_questions)
+      ? data.follow_up_questions.map(String)
+      : undefined,
+    assumptions: Array.isArray(data.assumptions)
+      ? data.assumptions.map(String)
+      : undefined,
+  };
+}
+
 export interface StreamTriageCallbacks {
   onStatus?: (message: string) => void;
-  onChunk?: (chunk: string) => void;
+  onPartial?: (partial: PartialTriageResponse) => void;
   onComplete?: (triage: TriageResponse) => void;
   onError?: (error: Error) => void;
 }
@@ -207,14 +254,14 @@ export const triageService = {
           const parsed = JSON.parse(data) as {
             type?: string;
             message?: string;
-            chunk?: string;
+            data?: Record<string, unknown>;
             triage?: BackendTriageResponse;
           };
 
           if (parsed.type === 'status' && parsed.message) {
             callbacks.onStatus?.(parsed.message);
-          } else if (parsed.type === 'token' && parsed.chunk) {
-            callbacks.onChunk?.(parsed.chunk);
+          } else if (parsed.type === 'partial' && parsed.data) {
+            callbacks.onPartial?.(mapPartialTriage(parsed.data));
           } else if (parsed.type === 'done' && parsed.triage) {
             completed = mapTriageResponse(parsed.triage);
             callbacks.onComplete?.(completed);
@@ -224,9 +271,7 @@ export const triageService = {
             );
           }
         } catch (error) {
-          if (error instanceof SyntaxError) {
-            callbacks.onChunk?.(data);
-          } else {
+          if (!(error instanceof SyntaxError)) {
             throw error;
           }
         }

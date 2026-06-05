@@ -16,6 +16,7 @@ export function HomePage() {
     isLoading,
     isStreaming,
     streamingContent,
+    streamingTriage,
     statusMessage,
     error,
     loadChat,
@@ -75,6 +76,7 @@ export function HomePage() {
             isLoading={isLoading}
             isStreaming={isStreaming}
             streamingContent={streamingContent}
+            streamingTriage={streamingTriage}
             statusMessage={statusMessage}
             error={error}
             onSendMessage={handleSendMessage}

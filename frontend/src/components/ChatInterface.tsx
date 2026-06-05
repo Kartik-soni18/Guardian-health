@@ -8,15 +8,18 @@ import {
   Brain,
   Bone,
 } from 'lucide-react';
-import { ChatMessage as ChatMessageType } from '@/types';
+import { ChatMessage as ChatMessageType, PartialTriageResponse } from '@/types';
 import { ChatMessage } from './ChatMessage';
 import { SymptomInput } from './SymptomInput';
+import { StreamingTriageCard } from './StreamingTriageCard';
+import { StreamingFollowUp } from './StreamingFollowUp';
 
 interface ChatInterfaceProps {
   messages: ChatMessageType[];
   isLoading: boolean;
   isStreaming: boolean;
   streamingContent: string;
+  streamingTriage: PartialTriageResponse | null;
   statusMessage: string;
   error: string | null;
   onSendMessage: (content: string) => void;
@@ -39,6 +42,7 @@ export function ChatInterface({
   isLoading,
   isStreaming,
   streamingContent,
+  streamingTriage,
   statusMessage,
   error,
   onSendMessage,
@@ -47,7 +51,17 @@ export function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
-  const isTyping = isStreaming && streamingContent.length === 0;
+  const isFollowUpStream =
+    streamingTriage?.responseMode === 'follow_up' ||
+    ((streamingTriage?.followUpQuestions?.length ?? 0) > 0 && !streamingTriage?.triageLevel);
+  const isTriageReportStream =
+    Boolean(streamingTriage) &&
+    !isFollowUpStream &&
+    (streamingTriage?.responseMode === 'triage_report' ||
+      !!streamingTriage?.triageLevel ||
+      (streamingTriage?.immediateActions?.length ?? 0) > 0);
+  const hasStreamingPreview = isFollowUpStream || isTriageReportStream || Boolean(streamingContent);
+  const isTyping = isStreaming && !hasStreamingPreview;
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -55,7 +69,7 @@ export function ChatInterface({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingContent, scrollToBottom]);
+  }, [messages, streamingContent, streamingTriage, scrollToBottom]);
 
   const handleSend = (content: string) => {
     if (!hasMessages) {
@@ -130,21 +144,46 @@ export function ChatInterface({
               />
             ))}
 
-            {/* Streaming message */}
-            {isStreaming && streamingContent && (
-              <ChatMessage
-                message={{
-                  id: 'streaming',
-                  chatId: '',
-                  role: 'assistant',
-                  content: streamingContent,
-                  triage: null,
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                }}
-                isLast
-                isStreaming
-              />
+            {/* Streaming structured triage */}
+            {isStreaming && isTriageReportStream && streamingTriage && (
+              <div className="bg-white/60 dark:bg-gray-900/40">
+                <div className={`${messageRowClass} py-5`}>
+                  <div className="shrink-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-950">
+                      <Sparkles className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                        GuardianHealth
+                      </span>
+                    </div>
+                    <StreamingTriageCard triage={streamingTriage} />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Streaming follow-up */}
+            {isStreaming && isFollowUpStream && streamingTriage && (
+              <div className="bg-white/60 dark:bg-gray-900/40">
+                <div className={`${messageRowClass} py-5`}>
+                  <div className="shrink-0">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-950">
+                      <Sparkles className="h-4 w-4 text-primary-600 dark:text-primary-400" />
+                    </div>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                        GuardianHealth
+                      </span>
+                    </div>
+                    <StreamingFollowUp triage={streamingTriage} />
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Typing indicator — matches ChatMessage row layout */}

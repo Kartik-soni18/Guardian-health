@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Chat, ChatMessage } from '@/types';
+import { Chat, ChatMessage, PartialTriageResponse } from '@/types';
 
 interface ChatState {
   chats: Chat[];
@@ -8,6 +8,7 @@ interface ChatState {
   isLoading: boolean;
   isStreaming: boolean;
   streamingContent: string;
+  streamingTriage: PartialTriageResponse | null;
   statusMessage: string;
   error: string | null;
 
@@ -20,6 +21,8 @@ interface ChatState {
   updateMessage: (messageId: string, updates: Partial<ChatMessage>) => void;
   appendStreamingContent: (chunk: string) => void;
   setStreamingContent: (content: string) => void;
+  mergeStreamingTriage: (partial: PartialTriageResponse) => void;
+  setStreamingTriage: (triage: PartialTriageResponse | null) => void;
   setStatusMessage: (message: string) => void;
   setIsLoading: (loading: boolean) => void;
   setIsStreaming: (streaming: boolean) => void;
@@ -34,6 +37,7 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
   isLoading: false,
   isStreaming: false,
   streamingContent: '',
+  streamingTriage: null,
   statusMessage: '',
   error: null,
 
@@ -96,6 +100,24 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
 
   setStreamingContent: (content) => set({ streamingContent: content }),
 
+  mergeStreamingTriage: (partial) =>
+    set((state) => ({
+      streamingTriage: {
+        ...(state.streamingTriage || {}),
+        ...partial,
+        immediateActions: partial.immediateActions ?? state.streamingTriage?.immediateActions,
+        crucialWarnings: partial.crucialWarnings ?? state.streamingTriage?.crucialWarnings,
+        resourceRecommendations:
+          partial.resourceRecommendations ?? state.streamingTriage?.resourceRecommendations,
+        requiredFollowUp: partial.requiredFollowUp ?? state.streamingTriage?.requiredFollowUp,
+        likelyConditions: partial.likelyConditions ?? state.streamingTriage?.likelyConditions,
+        followUpQuestions: partial.followUpQuestions ?? state.streamingTriage?.followUpQuestions,
+        assumptions: partial.assumptions ?? state.streamingTriage?.assumptions,
+      },
+    })),
+
+  setStreamingTriage: (triage) => set({ streamingTriage: triage }),
+
   setStatusMessage: (message) => set({ statusMessage: message }),
 
   setIsLoading: (loading) => set({ isLoading: loading }),
@@ -108,6 +130,7 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
     set({
       isStreaming: false,
       streamingContent: '',
+      streamingTriage: null,
       statusMessage: '',
     }),
 }));
