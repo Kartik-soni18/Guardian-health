@@ -38,7 +38,7 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
 
   addChat: (chat) =>
     set((state) => ({
-      chats: [chat, ...state.chats],
+      chats: [{ ...chat, messages: chat.messages || [] }, ...state.chats],
       currentChatId: chat.id,
       messages: chat.messages || [],
     })),
@@ -69,9 +69,15 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
   setMessages: (messages) => set({ messages }),
 
   addMessage: (message) =>
-    set((state) => ({
-      messages: [...state.messages, message],
-    })),
+    set((state) => {
+      const messages = [...state.messages, message];
+      const chats = state.chats.map((chat) =>
+        chat.id === message.chatId
+          ? { ...chat, messages, updatedAt: new Date().toISOString() }
+          : chat
+      );
+      return { messages, chats };
+    }),
 
   updateMessage: (messageId, updates) =>
     set((state) => ({

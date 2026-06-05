@@ -7,7 +7,6 @@ Two main modes:
 """
 
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -35,33 +34,38 @@ def _build_context(
     top_predictions: list[dict] | None = None,
     ml_confidence: float = 0.0,
 ) -> str:
-    """Build rich context string for LLM prompts."""
-    lines = ["=== PATIENT QUERY ===", scrubbed, ""]
+    """Build compact context for LLM prompts."""
+    lines = [f"Query: {scrubbed}"]
 
     if history:
-        lines.append("=== CONVERSATION HISTORY ===")
-        for msg in history[-6:]:  # Last 6 messages for context
-            role = msg.get("role", "unknown")
-            content = msg.get("content", "")
-            lines.append(f"{role}: {content}")
-        lines.append("")
+        recent = " | ".join(
+            f"{msg.get('role', '?')}: {msg.get('content', '')[:100]}"
+            for msg in history[-3:]
+        )
+        lines.append(f"History: {recent}")
 
     if clinical_entities:
-        lines.append("=== EXTRACTED CLINICAL ENTITIES ===")
-        lines.append(json.dumps(clinical_entities, indent=2))
-        lines.append("")
+        symptoms = ", ".join(clinical_entities.get("symptoms", []))
+        lines.append(
+            f"Entities: symptoms=[{symptoms}] dur={clinical_entities.get('duration')} "
+            f"sev={clinical_entities.get('severity')}"
+        )
 
-    if ml_prediction:
-        lines.append("=== ML PREDICTION ===")
-        lines.append(json.dumps(ml_prediction, indent=2))
-        lines.append("")
+    preds = top_predictions or (ml_prediction or {}).get("top_predictions", [])
+    if preds:
+        summary = ", ".join(
+            f"{p.get('condition', '?')}({p.get('confidence', 0):.0%})"
+            for p in preds[:3]
+        )
+        lines.append(f"Dataset predictions: {summary} (conf={ml_confidence:.2f})")
 
-    if top_predictions:
-        lines.append("=== ML TOP PREDICTIONS ===")
-        for pred in top_predictions[:5]:
-            lines.append(f"- {pred.get('condition', 'unknown')}: {pred.get('confidence', 0):.2f}")
-        lines.append(f"Overall ML confidence: {ml_confidence:.2f}")
-        lines.append("")
+    matches = (ml_prediction or {}).get("matches", [])
+    if matches:
+        refs = "; ".join(
+            f"{m['symptom']}:{m['severity']}/{m['region']}"
+            for m in matches[:2]
+        )
+        lines.append(f"Regional data: {refs}")
 
     return "\n".join(lines)
 

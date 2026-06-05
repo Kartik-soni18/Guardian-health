@@ -11,6 +11,8 @@ RUN npm ci --prefer-offline --no-audit
 
 # Copy source and build
 COPY frontend/ ./
+ARG VITE_API_URL=/api/v1
+ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 # ==========================================

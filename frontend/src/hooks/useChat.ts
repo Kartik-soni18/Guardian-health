@@ -1,82 +1,42 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
-import { chatService } from '@/services/chatService';
+import { triageService } from '@/services/triageService';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
-import { Chat, ChatMessage } from '@/types';
+import { Chat, ChatMessage, TriageRequest } from '@/types';
+
+function buildChatTitle(content: string): string {
+  const trimmed = content.trim();
+  return trimmed.length > 48 ? `${trimmed.slice(0, 48)}…` : trimmed || 'New chat';
+}
 
 export function useChat() {
-  const queryClient = useQueryClient();
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const userId = useAuthStore((s) => s.user?.id);
   const {
     chats,
     currentChatId,
     messages,
-    isLoading: storeLoading,
+    isLoading,
     isStreaming,
     streamingContent,
     error,
-    setChats,
     addChat,
     removeChat,
     setCurrentChat,
     setMessages,
     addMessage,
-    appendStreamingContent,
-    setStreamingContent,
-    setIsLoading,
     setIsStreaming,
+    setStreamingContent,
     setError,
     clearStreaming,
   } = useChatStore();
 
-  const chatsQuery = useQuery({
-    queryKey: ['chats'],
-    queryFn: async () => {
-      const data = await chatService.listChats();
-      setChats(data);
-      return data;
-    },
-    enabled: isAuthenticated,
-    staleTime: 30 * 1000,
-  });
-
-  const createChatMutation = useMutation({
-    mutationFn: async (initialMessage?: string) => {
-      const chat = await chatService.createChat(initialMessage);
-      return chat;
-    },
-    onSuccess: (chat) => {
-      addChat(chat);
-      queryClient.invalidateQueries({ queryKey: ['chats'] });
-    },
-  });
-
-  const deleteChatMutation = useMutation({
-    mutationFn: async (chatId: string) => {
-      await chatService.deleteChat(chatId);
-      return chatId;
-    },
-    onSuccess: (chatId) => {
-      removeChat(chatId);
-      queryClient.invalidateQueries({ queryKey: ['chats'] });
-    },
-  });
-
   const loadChat = useCallback(
     async (chatId: string) => {
+      const chat = chats.find((item) => item.id === chatId);
       setCurrentChat(chatId);
-      setIsLoading(true);
-      try {
-        const data = await chatService.getChat(chatId);
-        setMessages(data.messages || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load chat');
-      } finally {
-        setIsLoading(false);
-      }
+      setMessages(chat?.messages || []);
     },
-    [setCurrentChat, setMessages, setIsLoading, setError]
+    [chats, setCurrentChat, setMessages]
   );
 
   const sendMessage = useCallback(
@@ -94,56 +54,69 @@ export function useChat() {
       setIsStreaming(true);
       setStreamingContent('');
 
+      const history = [...messages, userMessage];
+
       try {
-        await chatService.streamMessage(
-          chatId,
-          content,
-          (chunk) => {
-            appendStreamingContent(chunk);
-          },
-          (assistantMessage) => {
-            addMessage(assistantMessage);
-            clearStreaming();
-          },
-          (err) => {
-            setError(err.message);
-            clearStreaming();
-          }
+        const triage = await triageService.submitTriage(
+          { query: content, symptoms: content } as TriageRequest,
+          { chatId, history }
         );
+
+        const assistantMessage: ChatMessage = {
+          id: crypto.randomUUID(),
+          chatId,
+          role: 'assistant',
+          content: triage.summary,
+          triage,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        addMessage(assistantMessage);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to send message');
+      } finally {
         clearStreaming();
       }
     },
-    [addMessage, setIsStreaming, setStreamingContent, appendStreamingContent, clearStreaming, setError]
+    [addMessage, clearStreaming, messages, setError, setIsStreaming, setStreamingContent]
   );
 
   const createNewChat = useCallback(
     async (initialMessage?: string): Promise<Chat | null> => {
-      try {
-        const chat = await createChatMutation.mutateAsync(initialMessage);
-        return chat;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to create chat');
-        return null;
-      }
+      const chat: Chat = {
+        id: crypto.randomUUID(),
+        title: buildChatTitle(initialMessage || 'New chat'),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        userId: userId || 'anonymous',
+        messages: [],
+      };
+      addChat(chat);
+      return chat;
     },
-    [createChatMutation, setError]
+    [addChat, userId]
+  );
+
+  const deleteChat = useCallback(
+    (chatId: string) => {
+      removeChat(chatId);
+    },
+    [removeChat]
   );
 
   return {
     chats,
     currentChatId,
     messages,
-    isLoading: storeLoading || chatsQuery.isLoading || createChatMutation.isPending,
+    isLoading,
     isStreaming,
     streamingContent,
     error,
     loadChat,
     sendMessage,
     createNewChat,
-    deleteChat: deleteChatMutation.mutate,
-    isDeletingChat: deleteChatMutation.isPending,
+    deleteChat,
+    isDeletingChat: false,
     setCurrentChat,
   };
 }

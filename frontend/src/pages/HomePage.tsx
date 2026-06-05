@@ -70,7 +70,7 @@ export function HomePage() {
     setShowResult(true);
 
     try {
-      await submitTriage({ symptoms, severity: 'moderate' });
+      await submitTriage({ query: symptoms, symptoms });
     } catch {
       toast.error('Failed to analyze symptoms. Please try again.');
     }

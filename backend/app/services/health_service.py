@@ -1,38 +1,34 @@
-"""GuardianHealth v2 Health Check Service — NO external dependencies."""
+"""Health check service."""
 
 from datetime import datetime, timezone
 from typing import Any, Dict
 
+from app.cache import ping_redis
 from app.config import get_settings
-from app.db.dynamodb import DynamoDBManager
-
-_request_counts: Dict[str, int] = {}
-_cache_hits = 0
-_cache_misses = 0
+from app.db.mongodb import ping_mongodb
 
 
 class HealthService:
-    """Health monitoring and metrics."""
-
-    def __init__(self, db: DynamoDBManager) -> None:
-        self.db = db
-
     async def get_status(self) -> Dict[str, Any]:
-        """Overall health status."""
-        dynamodb_ok = await self.db.ping()
+        mongo_ok = await ping_mongodb()
+        redis_ok = await ping_redis()
         settings = get_settings()
+        healthy = mongo_ok and (redis_ok or not settings.upstash_redis_rest_url)
         return {
-            "status": "healthy" if dynamodb_ok else "degraded",
+            "status": "healthy" if healthy else "degraded",
             "version": settings.app_version,
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "dynamodb": dynamodb_ok,
+            "mongodb": mongo_ok,
+            "redis": redis_ok,
         }
 
     async def get_readiness(self) -> Dict[str, Any]:
-        """Readiness probe for orchestrators."""
-        dynamodb_ok = await self.db.ping()
+        mongo_ok = await ping_mongodb()
+        redis_ok = await ping_redis()
+        settings = get_settings()
         checks = {
-            "dynamodb": dynamodb_ok,
+            "mongodb": mongo_ok,
+            "redis": redis_ok if settings.upstash_redis_rest_url else True,
             "configuration": True,
         }
         return {
@@ -42,45 +38,7 @@ class HealthService:
         }
 
     def get_liveness(self) -> Dict[str, Any]:
-        """Liveness probe — always returns OK if process is running."""
         return {
             "alive": True,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-
-    def get_metrics(self) -> Dict[str, Any]:
-        """Return in-memory metrics."""
-        global _cache_hits, _cache_misses, _request_counts
-        return {
-            "cache_stats": {
-                "hits": _cache_hits,
-                "misses": _cache_misses,
-                "hit_rate": _cache_hits / max(_cache_hits + _cache_misses, 1),
-            },
-            "request_counts": dict(_request_counts),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-    @staticmethod
-    def record_request(endpoint: str) -> None:
-        """Increment request counter for an endpoint."""
-        global _request_counts
-        _request_counts[endpoint] = _request_counts.get(endpoint, 0) + 1
-
-    @staticmethod
-    def record_cache_hit() -> None:
-        global _cache_hits
-        _cache_hits += 1
-
-    @staticmethod
-    def record_cache_miss() -> None:
-        global _cache_misses
-        _cache_misses += 1
-
-    @staticmethod
-    def reset_metrics() -> None:
-        """Reset all metrics (useful in tests)."""
-        global _cache_hits, _cache_misses, _request_counts
-        _cache_hits = 0
-        _cache_misses = 0
-        _request_counts = {}

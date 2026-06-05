@@ -47,11 +47,12 @@ class TriageState(TypedDict, total=False):
     extra_context: str | None
 
     # ------------------------------------------------------------------
-    # ML prediction fields
+    # Dataset / prediction fields
     # ------------------------------------------------------------------
     ml_prediction: dict[str, Any] | None
     ml_confidence: float
     top_predictions: list[dict[str, Any]]
+    dataset_matches: list[dict[str, Any]] | None
 
     # ------------------------------------------------------------------
     # Reasoning fields
@@ -89,6 +90,7 @@ class TriageState(TypedDict, total=False):
     # ------------------------------------------------------------------
     # Response & persistence
     # ------------------------------------------------------------------
+    response_text: str | None
     response_data: dict[str, Any] | None
     audit_hash: str | None
 

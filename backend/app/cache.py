@@ -1,147 +1,98 @@
-"""In-memory caching layer for GuardianHealth.
+"""Upstash Redis cache — REST API, Lambda-friendly."""
 
-Uses cachetools.TTLCache for per-process caching. This is NOT shared across
-multiple server instances — for a single-instance or development deployment
-this is sufficient. For multi-instance production, switch to ElastiCache or
-DynamoDB DAX.
+import asyncio
+import hashlib
+import json
+import logging
+from typing import Any, Optional
 
-All caches are thread-safe thanks to cachetools internal locking.
-"""
+from app.config import get_settings
 
+logger = logging.getLogger("guardian.cache")
 
-import threading
-import time
-from typing import Any, Dict, Optional
-
-from cachetools import TTLCache
-
-# ------------------------------------------------------------------------------
-# Response cache — triage / LLM responses
-# ------------------------------------------------------------------------------
-
-response_cache: TTLCache = TTLCache(maxsize=1000, ttl=300)
-"""Cache for triage responses keyed by symptom-hash / query fingerprint.
-
-TTL: 5 minutes. Max 1000 entries.  Oldest entries evicted on maxsize.
-"""
-
-# ------------------------------------------------------------------------------
-# PubMed cache — literature search results
-# ------------------------------------------------------------------------------
-
-pubmed_cache: TTLCache = TTLCache(maxsize=500, ttl=3600)
-"""Cache for PubMed search results keyed by search term hash.
-
-TTL: 1 hour.  Max 500 entries.
-"""
-
-# ------------------------------------------------------------------------------
-# Rate limit store — simple per-key counter fallback
-# ------------------------------------------------------------------------------
-
-_rate_limit_store: Dict[str, Dict[str, Any]] = {}
-_rate_limit_lock = threading.Lock()
-"""Simple in-memory rate limit tracking keyed by client identifier.
-
-Structure: {key: {"count": int, "window_start": float}}
-
-This is used as a fallback when slowapi is not in the call path,
-or for custom rate-limiting logic outside the HTTP layer.
-"""
+_redis_client: Any = None
 
 
-def rate_limit_hit(key: str, *, max_requests: int = 10, window_seconds: int = 60) -> bool:
-    """Increment a simple sliding-window counter for *key*.
+def _get_redis():
+    global _redis_client
+    if _redis_client is not None:
+        return _redis_client
 
-    Returns:
-        True if the key is now OVER the limit, False otherwise.
-    """
-    now = time.time()
-    with _rate_limit_lock:
-        entry = _rate_limit_store.get(key)
-        if entry is None or now > entry["window_start"] + window_seconds:
-            _rate_limit_store[key] = {"count": 1, "window_start": now}
-            return False
+    settings = get_settings()
+    if not settings.upstash_redis_rest_url or not settings.upstash_redis_rest_token:
+        return None
 
-        entry["count"] += 1
-        return entry["count"] > max_requests
+    try:
+        from upstash_redis import Redis
 
-
-def rate_limit_reset(key: str) -> None:
-    """Remove a key from the rate limit store."""
-    with _rate_limit_lock:
-        _rate_limit_store.pop(key, None)
-
-
-# ------------------------------------------------------------------------------
-# Monitoring / introspection
-# ------------------------------------------------------------------------------
+        _redis_client = Redis(
+            url=settings.upstash_redis_rest_url,
+            token=settings.upstash_redis_rest_token,
+        )
+        return _redis_client
+    except Exception as exc:
+        logger.warning("Upstash Redis unavailable: %s", exc)
+        return None
 
 
-def get_cache_stats() -> Dict[str, Any]:
-    """Return current cache occupancy and hit/miss statistics.
-
-    Returns:
-        Dict with keys: response_cache, pubmed_cache, rate_limit_store.
-    """
-    return {
-        "response_cache": {
-            "currsize": response_cache.currsize,
-            "maxsize": response_cache.maxsize,
-            "ttl": response_cache.ttl,
-        },
-        "pubmed_cache": {
-            "currsize": pubmed_cache.currsize,
-            "maxsize": pubmed_cache.maxsize,
-            "ttl": pubmed_cache.ttl,
-        },
-        "rate_limit_store": {
-            "currsize": len(_rate_limit_store),
-        },
-    }
+async def ping_redis() -> bool:
+    client = _get_redis()
+    if client is None:
+        return False
+    try:
+        result = await asyncio.to_thread(client.ping)
+        return bool(result)
+    except Exception:
+        return False
 
 
-def cache_key(*parts: str) -> str:
-    """Build a deterministic cache key from ordered string parts.
-
-    Example:
-        cache_key("triage", user_id, hashlib.sha256(query.encode()).hexdigest()[:16])
-    """
-    return "|".join(parts)
+def cache_key(prefix: str, *parts: str) -> str:
+    raw = ":".join(parts)
+    digest = hashlib.sha256(raw.encode()).hexdigest()[:16]
+    return f"guardian:{prefix}:{digest}"
 
 
-# ------------------------------------------------------------------------------
-# Utility helpers
-# ------------------------------------------------------------------------------
+async def cache_get(key: str) -> Optional[Any]:
+    client = _get_redis()
+    if client is None:
+        return None
+    try:
+        raw = await asyncio.to_thread(client.get, key)
+        if raw is None:
+            return None
+        return json.loads(raw) if isinstance(raw, str) else raw
+    except Exception as exc:
+        logger.debug("cache_get miss key=%s err=%s", key, exc)
+        return None
 
 
-def get_cached_response(key: str) -> Any | None:
-    """Look up a triage response by key. Returns None if missing or expired."""
-    return response_cache.get(key)
+async def cache_set(key: str, value: Any, ttl_seconds: int | None = None) -> bool:
+    client = _get_redis()
+    if client is None:
+        return False
+    settings = get_settings()
+    ttl = ttl_seconds or settings.cache_ttl_seconds
+    try:
+        payload = json.dumps(value, default=str)
+        await asyncio.to_thread(client.set, key, payload, ex=ttl)
+        return True
+    except Exception as exc:
+        logger.debug("cache_set failed key=%s err=%s", key, exc)
+        return False
 
 
-def set_cached_response(key: str, value: Any) -> None:
-    """Store a triage response. Evicts oldest if maxsize reached."""
-    response_cache[key] = value
+async def cache_delete(key: str) -> None:
+    client = _get_redis()
+    if client is None:
+        return
+    try:
+        await asyncio.to_thread(client.delete, key)
+    except Exception:
+        pass
 
 
-def get_cached_pubmed(key: str) -> Any | None:
-    """Look up PubMed results by key."""
-    return pubmed_cache.get(key)
-
-
-def set_cached_pubmed(key: str, value: Any) -> None:
-    """Store PubMed results."""
-    pubmed_cache[key] = value
-
-
-def invalidate_user_cache(user_id: str) -> None:
-    """Remove all cache entries scoped to a specific user.
-
-    This is a best-effort O(n) scan — acceptable given cache sizes < 1000.
-    """
-    prefix = f"user:{user_id}"
-    for cache in (response_cache, pubmed_cache):
-        keys_to_remove = [k for k in cache if k.startswith(prefix)]
-        for k in keys_to_remove:
-            cache.pop(k, None)
+def get_rate_limit_storage_uri() -> str:
+    settings = get_settings()
+    if settings.upstash_redis_url:
+        return settings.upstash_redis_url
+    return "memory://"

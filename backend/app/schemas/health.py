@@ -1,30 +1,19 @@
-"""Health check schema definitions."""
+"""Health check schemas."""
 
 from typing import Any, Dict
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class HealthStatus(BaseModel):
-    """Overall application health status."""
-
-    status: str = "healthy"
-    version: str = "2.0.0"
-    timestamp: str = ""
-    dynamodb: bool = True
+    status: str
+    version: str
+    timestamp: str
+    mongodb: bool
+    redis: bool = False
 
 
 class ReadinessStatus(BaseModel):
-    """Kubernetes-style readiness probe response."""
-
-    ready: bool = True
-    checks: Dict[str, Any] = Field(default_factory=dict)
-    timestamp: str = ""
-
-
-class HealthMetrics(BaseModel):
-    """In-memory application metrics."""
-
-    cache_stats: Dict[str, Any] = Field(default_factory=dict)
-    request_counts: Dict[str, int] = Field(default_factory=dict)
-    timestamp: str = ""
+    ready: bool
+    checks: Dict[str, Any]
+    timestamp: str

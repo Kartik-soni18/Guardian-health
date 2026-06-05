@@ -1,7 +1,7 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
 
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -25,7 +25,7 @@ export const api: AxiosInstance = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
+  timeout: 60000,
 });
 
 api.interceptors.request.use(
@@ -48,7 +48,6 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Handle 429 Too Many Requests
     if (error.response?.status === 429) {
       const message =
         (error.response?.data as { message?: string })?.message ||
@@ -61,7 +60,6 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Handle 401 Unauthorized
     if (error.response?.status === 401 && !originalRequest._retry) {
       if (isRefreshing) {
         return new Promise((resolve, reject) => {
@@ -86,16 +84,19 @@ api.interceptors.response.use(
         }
 
         const response = await axios.post(`${API_URL}/auth/refresh`, {
-          refreshToken,
+          refresh_token: refreshToken,
         });
 
-        const { accessToken, refreshToken: newRefreshToken } = response.data;
-        useAuthStore.getState().login(accessToken, newRefreshToken);
+        const data = response.data as {
+          access_token: string;
+          refresh_token: string;
+        };
+        useAuthStore.getState().login(data.access_token, data.refresh_token);
 
-        processQueue(null, accessToken);
+        processQueue(null, data.access_token);
 
         if (originalRequest.headers) {
-          originalRequest.headers.Authorization = `Bearer ${accessToken}`;
+          originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
         }
         return api(originalRequest);
       } catch (refreshError) {

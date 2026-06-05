@@ -1,15 +1,13 @@
-"""GuardianHealth v2 Services."""
+"""Business logic services."""
 
-from app.services.auth_service import AuthService
-from app.services.triage_service import TriageService
-from app.services.chat_service import ChatService
-from app.services.health_service import HealthService
-from app.services.ml_service import MLService
+__all__ = ["AuthService", "TriageService"]
 
-__all__ = [
-    "AuthService",
-    "TriageService",
-    "ChatService",
-    "HealthService",
-    "MLService",
-]
+
+def __getattr__(name: str):
+    if name == "AuthService":
+        from app.services.auth_service import AuthService
+        return AuthService
+    if name == "TriageService":
+        from app.services.triage_service import TriageService
+        return TriageService
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

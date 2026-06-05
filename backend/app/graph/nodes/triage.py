@@ -26,7 +26,7 @@ def _get_llm() -> AsyncLLMClient:
     return _llm
 
 DISEASE_INFO_PROMPT_PATH = (
-    Path(__file__).with_suffix("").parent.parent / "prompts" / "disease_info.txt"
+    Path(__file__).resolve().parent.parent.parent / "agents" / "prompts" / "disease_info.txt"
 )
 
 

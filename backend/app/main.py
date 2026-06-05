@@ -1,4 +1,4 @@
-"""GuardianHealth v2 FastAPI Application — AWS-free, DynamoDB only."""
+"""GuardianHealth FastAPI — MongoDB auth + LangGraph triage."""
 
 from contextlib import asynccontextmanager
 
@@ -7,47 +7,45 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
-from app.config import get_settings
+from app.config import get_settings, validate_startup
 from app.core.dependencies import get_rate_limiter
-from app.routers import auth_router, chat_router, health_router, triage_router
+from app.core.exceptions import GuardianException
+from app.db.mongodb import close_mongodb, connect_mongodb, ensure_mongodb
+from app.routers import auth_router, health_router, triage_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan — startup and shutdown hooks."""
-    # Startup: ensure DynamoDB tables exist (local dev)
-    from app.dynamodb import create_tables, get_ddb_client
-    try:
-        await create_tables()
-    except Exception:
-        pass  # Tables may already exist or we're in production
+    validate_startup()
+    await ensure_mongodb()
     yield
-    # Shutdown
-    try:
-        client = await get_ddb_client().__aenter__()
-        await client.close()
-    except Exception:
-        pass
+    await close_mongodb()
 
 
 def create_app() -> FastAPI:
-    """Application factory."""
     settings = get_settings()
     app = FastAPI(
         title=settings.app_name,
-        version="2.0.0",
-        description="GuardianHealth v2 — AWS-free symptom checker API with DynamoDB",
+        version=settings.app_version,
+        description="GuardianHealth — MongoDB auth + LangGraph LLM triage",
         lifespan=lifespan,
         docs_url="/docs" if settings.debug else None,
         redoc_url="/redoc" if settings.debug else None,
     )
 
-    # Rate limiter
     limiter = get_rate_limiter()
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-    # CORS
+    @app.exception_handler(GuardianException)
+    async def guardian_exception_handler(request, exc: GuardianException):
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_dict(),
+            headers=exc.headers,
+        )
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
@@ -56,10 +54,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Routers
     app.include_router(auth_router)
     app.include_router(triage_router)
-    app.include_router(chat_router)
     app.include_router(health_router)
 
     return app

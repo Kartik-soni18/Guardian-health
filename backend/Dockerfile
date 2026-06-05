@@ -37,8 +37,10 @@ RUN groupadd -r guardian && useradd -r -g guardian -d /app guardian
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy application code
+# Copy application code and reference data
 COPY backend/app ./app
+COPY backend/data ./data
+COPY backend/handler.py ./handler.py
 COPY backend/scripts ./scripts
 
 # Set proper permissions

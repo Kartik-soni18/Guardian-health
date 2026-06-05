@@ -37,6 +37,7 @@ class TestRegister:
             "username": test_user["username"],
             "email": "different@example.com",
             "password": "StrongPass123!",
+            "full_name": "Duplicate User",
         })
         assert resp.status_code == 409
         assert "already exists" in resp.json()["detail"].lower()

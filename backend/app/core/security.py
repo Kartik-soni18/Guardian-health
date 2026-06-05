@@ -7,9 +7,10 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 
 from app.config import get_settings
+from app.core.exceptions import AuthenticationError
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -85,9 +86,9 @@ def verify_token(token: str, expected_type: str = "access") -> Dict[str, Any]:
     """Decode and verify a JWT token including type check."""
     payload = decode_token(token)
     if payload is None:
-        raise ValueError("Invalid or expired token")
+        raise AuthenticationError("Invalid or expired token")
     if payload.get("type") != expected_type:
-        raise ValueError(f"Token type mismatch: expected {expected_type}")
+        raise AuthenticationError(f"Token type mismatch: expected {expected_type}")
     return payload
 
 

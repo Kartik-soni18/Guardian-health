@@ -1,0 +1,11 @@
+# AWS Lambda container image — use with template.yaml (not docker-compose)
+FROM public.ecr.aws/lambda/python:3.12-arm64
+
+COPY backend/requirements.txt ${LAMBDA_TASK_ROOT}/
+RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
+
+COPY backend/app ${LAMBDA_TASK_ROOT}/app
+COPY backend/data ${LAMBDA_TASK_ROOT}/data
+COPY backend/handler.py ${LAMBDA_TASK_ROOT}/handler.py
+
+CMD ["handler.handler"]

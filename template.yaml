@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: GuardianHealth API — FastAPI on Lambda
+
+Globals:
+  Function:
+    Timeout: 60
+    MemorySize: 1536
+    Architectures:
+      - arm64
+
+Parameters:
+  SecretKey:
+    Type: String
+    NoEcho: true
+  TogetherApiKey:
+    Type: String
+    NoEcho: true
+  MongoDbUri:
+    Type: String
+  MongoDbName:
+    Type: String
+    Default: guardian_health
+  UpstashRedisRestUrl:
+    Type: String
+  UpstashRedisRestToken:
+    Type: String
+    NoEcho: true
+  AllowedOrigins:
+    Type: String
+    Default: https://kartik-soni18.github.io
+
+Resources:
+  GuardianApi:
+    Type: AWS::Serverless::Function
+    Metadata:
+      DockerTag: guardian-api
+      DockerContext: .
+      Dockerfile: backend/Dockerfile.lambda
+    Properties:
+      FunctionName: guardian-api
+      PackageType: Image
+      ImageUri: !Sub "${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/guardian-api:latest"
+      Environment:
+        Variables:
+          SECRET_KEY: !Ref SecretKey
+          TOGETHER_API_KEY: !Ref TogetherApiKey
+          MONGODB_URI: !Ref MongoDbUri
+          MONGODB_DB_NAME: !Ref MongoDbName
+          UPSTASH_REDIS_REST_URL: !Ref UpstashRedisRestUrl
+          UPSTASH_REDIS_REST_TOKEN: !Ref UpstashRedisRestToken
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          MOCK_MODE: 'false'
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            ApiId: !Ref HttpApi
+        ApiHealth:
+          Type: HttpApi
+          Properties:
+            Path: /health
+            Method: ANY
+            ApiId: !Ref HttpApi
+
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      StageName: $default
+      CorsConfiguration:
+        AllowOrigins:
+          - !Ref AllowedOrigins
+        AllowMethods:
+          - GET
+          - POST
+          - PUT
+          - DELETE
+          - OPTIONS
+        AllowHeaders:
+          - Authorization
+          - Content-Type
+
+Outputs:
+  ApiEndpoint:
+    Description: Lambda API Gateway endpoint
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"

@@ -1,37 +1,33 @@
-"""Triage schema definitions — re-exports plus TriageResult helper."""
+"""Triage API schemas."""
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
-
-from app.models.enums import TriageLevel
-from app.models.triage import TriageRequest, TriageResponse
+from pydantic import BaseModel, Field, field_validator
 
 
-class TriageResult(BaseModel):
-    """Internal triage outcome produced by ML/rules engine."""
-
-    level: TriageLevel = TriageLevel.UNKNOWN
-    confidence: float = Field(0.5, ge=0.0, le=1.0)
-    explanation: str = ""
-    recommended_actions: List[str] = []
-    follow_up_questions: List[str] = []
-
-
-class SimpleTriageResponse(BaseModel):
-    """Simplified triage response used by legacy service layer."""
-
-    triage: TriageResult
-    response: str = ""
-    sources: List[str] = []
+class TriageRequest(BaseModel):
+    query: str = Field(..., min_length=3, max_length=2000)
     chat_id: Optional[str] = None
+    conversation_history: Optional[List[Dict[str, str]]] = None
+
+    @field_validator("query")
+    @classmethod
+    def _normalize_query(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 3:
+            raise ValueError("Query must be at least 3 characters after trimming.")
+        return v
 
 
-__all__ = [
-    "TriageLevel",
-    "TriageRequest",
-    "TriageResponse",
-    "TriageResult",
-    "SimpleTriageResponse",
-    "ConversationMessage",
-]
+class TriageResponse(BaseModel):
+    response: str
+    triage_level: Optional[str] = None
+    routing: str = "unknown"
+    symptoms: List[str] = Field(default_factory=list)
+    reasoning: str = ""
+    compliance_passed: bool = True
+    audit_hash: Optional[str] = None
+    disclaimer: str = (
+        "This information is for educational purposes only and does not "
+        "constitute medical advice. Seek professional care for medical concerns."
+    )

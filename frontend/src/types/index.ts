@@ -1,6 +1,7 @@
 export interface User {
   id: string;
   email: string;
+  username?: string;
   firstName: string;
   lastName: string;
   createdAt: string;
@@ -16,25 +17,23 @@ export interface TokenResponse {
 
 export interface LoginCredentials {
   email: string;
+  username?: string;
   password: string;
 }
 
 export interface RegisterData {
   email: string;
+  username?: string;
   password: string;
   firstName: string;
   lastName: string;
 }
 
 export interface TriageRequest {
+  query: string;
   symptoms: string;
-  age?: number;
-  gender?: 'male' | 'female' | 'other';
-  duration?: string;
-  severity?: 'mild' | 'moderate' | 'severe';
-  medicalHistory?: string[];
-  medications?: string[];
-  allergies?: string[];
+  chatId?: string;
+  conversationHistory?: Array<{ role: string; content: string }>;
 }
 
 export interface TriageResponse {
