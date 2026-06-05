@@ -1,4 +1,5 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
+import { goToAppHome } from '@/lib/routes';
 import { useAuthStore } from '@/stores/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
@@ -102,7 +103,7 @@ api.interceptors.response.use(
       } catch (refreshError) {
         processQueue(refreshError, null);
         useAuthStore.getState().logout();
-        window.location.href = '/';
+        goToAppHome();
         return Promise.reject(refreshError);
       } finally {
         isRefreshing = false;

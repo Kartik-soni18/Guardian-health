@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
+import { goToAppHome } from '@/lib/routes';
 import { LoginCredentials, RegisterData } from '@/types';
 
 export function useAuth() {
@@ -51,7 +52,7 @@ export function useAuth() {
     onSettled: () => {
       logoutStore();
       queryClient.clear();
-      window.location.href = '/';
+      goToAppHome();
     },
   });
 
