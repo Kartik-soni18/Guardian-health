@@ -1,9 +1,6 @@
 export interface User {
   id: string;
-  email: string;
-  username?: string;
-  firstName: string;
-  lastName: string;
+  username: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -16,17 +13,13 @@ export interface TokenResponse {
 }
 
 export interface LoginCredentials {
-  email: string;
-  username?: string;
+  username: string;
   password: string;
 }
 
 export interface RegisterData {
-  email: string;
-  username?: string;
+  username: string;
   password: string;
-  firstName: string;
-  lastName: string;
 }
 
 export interface TriageRequest {

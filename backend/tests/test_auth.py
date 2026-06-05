@@ -20,9 +20,7 @@ class TestRegister:
         """Successful registration returns 201 and token pair."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": "newuser",
-            "email": "new@example.com",
             "password": "StrongPass123!",
-            "full_name": "New User",
         })
         assert resp.status_code == 201
         data = resp.json()
@@ -35,9 +33,7 @@ class TestRegister:
         """Registering with existing username returns 409."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": test_user["username"],
-            "email": "different@example.com",
             "password": "StrongPass123!",
-            "full_name": "Duplicate User",
         })
         assert resp.status_code == 409
         assert "already exists" in resp.json()["detail"].lower()
@@ -46,7 +42,6 @@ class TestRegister:
         """Password without uppercase fails validation."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": "weakuser1",
-            "email": "weak1@example.com",
             "password": "lowercase1!",
         })
         assert resp.status_code == 422
@@ -57,7 +52,6 @@ class TestRegister:
         """Password without lowercase fails validation."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": "weakuser2",
-            "email": "weak2@example.com",
             "password": "UPPERCASE1!",
         })
         assert resp.status_code == 422
@@ -66,7 +60,6 @@ class TestRegister:
         """Password without digit fails validation."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": "weakuser3",
-            "email": "weak3@example.com",
             "password": "NoDigitsHere!",
         })
         assert resp.status_code == 422
@@ -75,7 +68,6 @@ class TestRegister:
         """Password without special character fails validation."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": "weakuser4",
-            "email": "weak4@example.com",
             "password": "NoSpecial123",
         })
         assert resp.status_code == 422
@@ -84,17 +76,7 @@ class TestRegister:
         """Password shorter than 8 characters fails."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": "weakuser5",
-            "email": "weak5@example.com",
             "password": "Sh1!",
-        })
-        assert resp.status_code == 422
-
-    async def test_register_invalid_email(self, test_app: AsyncClient) -> None:
-        """Invalid email format returns 422."""
-        resp = await test_app.post("/api/v1/auth/register", json={
-            "username": "bademail",
-            "email": "not-an-email",
-            "password": "StrongPass123!",
         })
         assert resp.status_code == 422
 
@@ -102,7 +84,6 @@ class TestRegister:
         """Username shorter than 3 characters returns 422."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": "ab",
-            "email": "short@example.com",
             "password": "StrongPass123!",
         })
         assert resp.status_code == 422
@@ -111,7 +92,6 @@ class TestRegister:
         """Username with spaces or special chars returns 422."""
         resp = await test_app.post("/api/v1/auth/register", json={
             "username": "bad user!",
-            "email": "bad@example.com",
             "password": "StrongPass123!",
         })
         assert resp.status_code == 422
@@ -231,7 +211,6 @@ class TestMe:
         assert resp.status_code == 200
         data = resp.json()
         assert data["username"] == test_user["username"]
-        assert data["email"] == test_user["email"]
         assert "id" in data
 
     async def test_me_unauthenticated(self, test_app: AsyncClient) -> None:
@@ -267,7 +246,6 @@ class TestRateLimits:
         for i in range(7):
             resp = await test_app.post("/api/v1/auth/register", json={
                 "username": f"ratelimit{i}",
-                "email": f"rl{i}@example.com",
                 "password": "StrongPass123!",
             })
         assert resp.status_code == 429

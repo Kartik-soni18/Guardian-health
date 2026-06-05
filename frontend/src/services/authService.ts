@@ -9,8 +9,6 @@ interface BackendTokenResponse {
   user: {
     id: string;
     username: string;
-    email: string;
-    full_name: string;
     role: string;
     is_active: boolean;
     is_verified: boolean;
@@ -19,13 +17,9 @@ interface BackendTokenResponse {
 }
 
 function mapUser(user: BackendTokenResponse['user']): User {
-  const [firstName = '', ...rest] = user.full_name.split(' ');
   return {
     id: user.id,
-    email: user.email,
     username: user.username,
-    firstName,
-    lastName: rest.join(' '),
     createdAt: user.created_at,
     updatedAt: user.created_at,
   };
@@ -41,17 +35,10 @@ function mapTokenResponse(data: BackendTokenResponse): TokenResponse & { user: U
   };
 }
 
-function deriveUsername(email: string, firstName: string): string {
-  const local = email.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
-  const name = firstName.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 10);
-  const base = name || local || 'user';
-  return `${base}_${Date.now().toString(36).slice(-4)}`;
-}
-
 export const authService = {
   async login(credentials: LoginCredentials): Promise<TokenResponse & { user: User }> {
     const response = await api.post<BackendTokenResponse>('/auth/login', {
-      username: credentials.username || credentials.email,
+      username: credentials.username,
       password: credentials.password,
     });
     return mapTokenResponse(response.data);
@@ -59,10 +46,8 @@ export const authService = {
 
   async register(data: RegisterData): Promise<TokenResponse & { user: User }> {
     const response = await api.post<BackendTokenResponse>('/auth/register', {
-      username: data.username || deriveUsername(data.email, data.firstName),
-      email: data.email,
+      username: data.username,
       password: data.password,
-      full_name: `${data.firstName} ${data.lastName}`.trim(),
     });
     return mapTokenResponse(response.data);
   },

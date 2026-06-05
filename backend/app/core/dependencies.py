@@ -14,7 +14,7 @@ from app.core.security import verify_token
 from app.db.mongodb import MongoDBManager, ensure_mongodb
 from app.logging_config import get_logger
 from app.models.enums import UserRole
-from app.models.user import UserResponse, ddb_item_to_user, user_to_response
+from app.models.user import UserResponse, user_doc_to_response
 
 logger = get_logger("app.core.dependencies")
 
@@ -51,14 +51,14 @@ async def get_current_user(
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
         )
 
-    user = ddb_item_to_user(item)
-    if not user.is_active:
+    response = user_doc_to_response(item)
+    if not response.is_active:
         raise AuthenticationError(
             "User account is deactivated.",
             headers={"WWW-Authenticate": 'Bearer error="invalid_token"'},
         )
 
-    return user_to_response(user)
+    return response
 
 
 async def get_current_user_optional(

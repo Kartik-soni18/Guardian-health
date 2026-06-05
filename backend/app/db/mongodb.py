@@ -15,6 +15,28 @@ _client: Optional[AsyncIOMotorClient] = None
 _db: Optional[AsyncIOMotorDatabase] = None
 
 
+def _normalize_created_at(value: Any) -> str:
+    if value is None:
+        return datetime.now(timezone.utc).isoformat()
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value)
+
+
+def _normalize_user_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
+    doc.pop("_id", None)
+    username = doc["username"]
+    doc["id"] = username
+    doc["created_at"] = _normalize_created_at(doc.get("created_at"))
+    doc.setdefault("is_active", True)
+    doc.setdefault("is_verified", False)
+    doc.setdefault("role", "patient")
+    hashed = doc.get("hashed_password", doc.get("password_hash", ""))
+    doc["hashed_password"] = hashed
+    doc["password_hash"] = hashed
+    return doc
+
+
 async def connect_mongodb() -> None:
     global _client, _db
     if _db is not None:
@@ -23,14 +45,15 @@ async def connect_mongodb() -> None:
     _client = AsyncIOMotorClient(settings.mongodb_uri)
     _db = _client[settings.mongodb_db_name]
     await _db.command("ping")
-    for field, kwargs in (
-        ("username", {"unique": True}),
-        ("email", {"unique": True, "sparse": True}),
-    ):
-        try:
-            await _db.users.create_index(field, **kwargs)
-        except Exception as exc:
-            logger.warning("Could not ensure index on %s: %s", field, exc)
+    try:
+        await _db.users.create_index("username", unique=True)
+    except Exception as exc:
+        logger.warning("Could not ensure username index: %s", exc)
+    try:
+        await _db.users.drop_index("email_1")
+        logger.info("Dropped legacy email index from users collection")
+    except Exception:
+        pass
     logger.info("Connected to MongoDB database=%s", settings.mongodb_db_name)
 
 
@@ -91,27 +114,20 @@ class MongoDBManager:
             doc = await self.db.users.find_one({"username": username})
         if doc is None:
             return None
-        doc.pop("_id", None)
-        doc["id"] = doc.get("username", username)
-        return doc
+        return _normalize_user_doc(doc)
 
     async def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         username = user_data["username"]
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
         doc = {
             "username": username,
-            "email": user_data.get("email", ""),
-            "full_name": user_data.get("full_name", ""),
             "hashed_password": user_data.get(
                 "password_hash", user_data.get("hashed_password", "")
             ),
-            "is_active": True,
-            "is_verified": False,
-            "role": "patient",
             "created_at": now,
         }
         if self._sync_db is not None:
             await asyncio.to_thread(self._sync_db.users.insert_one, doc)
         else:
             await self.db.users.insert_one(doc)
-        return {**doc, "id": username, "password_hash": doc["hashed_password"]}
+        return _normalize_user_doc(doc)

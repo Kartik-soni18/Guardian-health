@@ -53,9 +53,7 @@ async def test_db(test_settings) -> AsyncGenerator[MongoDBManager, None]:
 async def test_user(test_db: MongoDBManager) -> Dict[str, Any]:
     return await test_db.create_user({
         "username": "testuser",
-        "email": "test@example.com",
         "password_hash": get_password_hash("TestPass123!"),
-        "full_name": "Test User",
     })
 
 

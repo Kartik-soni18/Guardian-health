@@ -86,8 +86,7 @@ export function Header() {
             ) : isAuthenticated && user ? (
               <div className="flex items-center gap-2">
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">
-                  {user.firstName?.[0]}
-                  {user.lastName?.[0]}
+                  {user.username[0]?.toUpperCase()}
                 </div>
                 <button
                   onClick={() => logout()}
@@ -176,14 +175,13 @@ export function Header() {
                 <div className="mt-2 space-y-1">
                   <div className="flex items-center gap-2 px-3 py-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700 dark:bg-primary-950">
-                      {user.firstName?.[0]}
-                      {user.lastName?.[0]}
+                      {user.username[0]?.toUpperCase()}
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {user.firstName} {user.lastName}
+                        {user.username}
                       </p>
-                      <p className="text-xs text-gray-500">{user.email}</p>
+                      <p className="text-xs text-gray-500">@{user.username}</p>
                     </div>
                   </div>
                   <button

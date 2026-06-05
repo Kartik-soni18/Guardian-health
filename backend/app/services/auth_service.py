@@ -23,9 +23,7 @@ class AuthService:
 
         user_data = {
             "username": user_create.username,
-            "email": str(user_create.email),
             "password_hash": get_password_hash(user_create.password),
-            "full_name": user_create.full_name or "",
         }
         return await self.db.create_user(user_data)
 

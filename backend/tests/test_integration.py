@@ -7,9 +7,7 @@ class TestFullPipeline:
     async def test_register_login_triage(self, test_app: AsyncClient) -> None:
         register_resp = await test_app.post("/api/v1/auth/register", json={
             "username": "pipelineuser",
-            "email": "pipeline@example.com",
             "password": "Pipeline123!",
-            "full_name": "Pipeline User",
         })
         assert register_resp.status_code == 201
         tokens = register_resp.json()

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.config import get_settings
 from app.core.dependencies import get_current_user, get_mongodb_manager, limiter
 from app.core.security import create_token_pair
+from app.models.user import user_doc_to_response
 from app.schemas.token import RefreshRequest
 from app.schemas.user import TokenResponse, UserCreate, UserResponse
 from app.services.auth_service import AuthService
@@ -40,16 +41,7 @@ async def register(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
-    user_response = UserResponse(
-        id=user["username"],
-        username=user["username"],
-        email=user["email"],
-        full_name=user.get("full_name", ""),
-        role=user.get("role", "patient"),
-        is_active=user.get("is_active", True),
-        is_verified=user.get("is_verified", False),
-        created_at=user.get("created_at", ""),
-    )
+    user_response = user_doc_to_response(user)
     access, refresh = create_token_pair(user["username"], extra_claims={"uid": user["id"]})
     return _token_response(access, refresh, user_response)
 
@@ -77,17 +69,7 @@ async def login(
         )
 
     assert user is not None
-    user_response = UserResponse(
-        id=user["username"],
-        username=user["username"],
-        email=user["email"],
-        full_name=user.get("full_name", ""),
-        role=user.get("role", "patient"),
-        is_active=user.get("is_active", True),
-        is_verified=user.get("is_verified", False),
-        created_at=user.get("created_at", ""),
-    )
-    return _token_response(access, refresh, user_response)
+    return _token_response(access, refresh, user_doc_to_response(user))
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -108,23 +90,13 @@ async def refresh(
         ) from exc
 
     assert user is not None
-    user_response = UserResponse(
-        id=user["username"],
-        username=user["username"],
-        email=user["email"],
-        full_name=user.get("full_name", ""),
-        role=user.get("role", "patient"),
-        is_active=user.get("is_active", True),
-        is_verified=user.get("is_verified", False),
-        created_at=user.get("created_at", ""),
-    )
     settings = get_settings()
     return TokenResponse(
         access_token=new_access,
         refresh_token=body.refresh_token,
         token_type="bearer",
         expires_in=settings.access_token_expire_minutes * 60,
-        user=user_response,
+        user=user_doc_to_response(user),
     )
 
 

@@ -54,15 +54,14 @@ export function SettingsPage() {
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="flex h-14 w-14 items-center justify-center rounded-full bg-primary-100 text-lg font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">
-                    {user.firstName?.[0]}
-                    {user.lastName?.[0]}
+                    {user.username[0]?.toUpperCase()}
                   </div>
                   <div>
                     <p className="font-semibold text-gray-900 dark:text-white">
-                      {user.firstName} {user.lastName}
+                      {user.username}
                     </p>
                     <p className="text-sm text-gray-500 dark:text-gray-400">
-                      {user.email}
+                      @{user.username}
                     </p>
                   </div>
                 </div>

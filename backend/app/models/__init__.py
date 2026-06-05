@@ -5,8 +5,8 @@ from app.models.user import (
     UserLogin,
     UserResponse,
     TokenResponse,
-    user_to_ddb_item,
-    ddb_item_to_user,
+    user_doc_to_response,
+    user_doc_to_user,
 )
 
 __all__ = [
@@ -16,6 +16,6 @@ __all__ = [
     "UserLogin",
     "UserResponse",
     "TokenResponse",
-    "user_to_ddb_item",
-    "ddb_item_to_user",
+    "user_doc_to_response",
+    "user_doc_to_user",
 ]

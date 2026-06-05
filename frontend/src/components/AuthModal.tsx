@@ -1,5 +1,5 @@
 import { useState, useEffect, FormEvent } from 'react';
-import { X, Eye, EyeOff, Loader2, Shield, Mail, Lock, User } from 'lucide-react';
+import { X, Eye, EyeOff, Loader2, Shield, Lock, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
@@ -10,17 +10,13 @@ interface AuthModalProps {
 }
 
 interface FormData {
-  email: string;
+  username: string;
   password: string;
-  firstName: string;
-  lastName: string;
 }
 
 interface FormErrors {
-  email?: string;
+  username?: string;
   password?: string;
-  firstName?: string;
-  lastName?: string;
   general?: string;
 }
 
@@ -29,10 +25,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [formData, setFormData] = useState<FormData>({
-    email: '',
+    username: '',
     password: '',
-    firstName: '',
-    lastName: '',
   });
 
   const { login, register, isLoginLoading, isRegisterLoading, loginError, registerError } = useAuth();
@@ -55,32 +49,25 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
   useEffect(() => {
     if (isOpen) {
       setErrors({});
-      setFormData({ email: '', password: '', firstName: '', lastName: '' });
+      setFormData({ username: '', password: '' });
     }
   }, [isOpen, tab]);
 
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
 
-    if (!formData.email) {
-      newErrors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Please enter a valid email';
+    if (!formData.username) {
+      newErrors.username = 'Username is required';
+    } else if (formData.username.length < 3) {
+      newErrors.username = 'Username must be at least 3 characters';
+    } else if (!/^[a-zA-Z0-9_]+$/.test(formData.username)) {
+      newErrors.username = 'Username can only contain letters, numbers, and underscores';
     }
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
     } else if (formData.password.length < 8) {
       newErrors.password = 'Password must be at least 8 characters';
-    }
-
-    if (tab === 'register') {
-      if (!formData.firstName) {
-        newErrors.firstName = 'First name is required';
-      }
-      if (!formData.lastName) {
-        newErrors.lastName = 'Last name is required';
-      }
     }
 
     setErrors(newErrors);
@@ -95,15 +82,10 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
 
     try {
       if (tab === 'login') {
-        await login({ email: formData.email, password: formData.password });
+        await login({ username: formData.username, password: formData.password });
         onClose();
       } else {
-        await register({
-          email: formData.email,
-          password: formData.password,
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-        });
+        await register({ username: formData.username, password: formData.password });
         onClose();
       }
     } catch {
@@ -117,15 +99,12 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 
-      {/* Modal */}
       <div className="relative w-full max-w-md animate-slide-up rounded-2xl bg-white shadow-2xl dark:bg-gray-900">
-        {/* Close button */}
         <button
           onClick={onClose}
           className="absolute right-4 top-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
@@ -133,7 +112,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
           <X className="h-5 w-5" />
         </button>
 
-        {/* Header */}
         <div className="px-6 pt-8 text-center">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-950">
             <Shield className="h-6 w-6 text-primary-600 dark:text-primary-400" />
@@ -148,7 +126,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
           </p>
         </div>
 
-        {/* Tabs */}
         <div className="mx-6 mt-6 flex rounded-xl bg-gray-100 p-1 dark:bg-gray-800">
           <button
             onClick={() => setTab('login')}
@@ -174,9 +151,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
           </button>
         </div>
 
-        {/* Form */}
         <form onSubmit={handleSubmit} className="px-6 py-6">
-          {/* General Error */}
           {errors.general && (
             <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
               {errors.general}
@@ -184,34 +159,33 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
           )}
 
           <div className="space-y-4">
-            {/* Email */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Email
+                Username
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
-                  type="email"
-                  value={formData.email}
+                  type="text"
+                  value={formData.username}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, email: e.target.value }))
+                    setFormData((prev) => ({ ...prev, username: e.target.value }))
                   }
                   className={cn(
                     'w-full rounded-lg border bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 dark:bg-gray-800 dark:text-white',
-                    errors.email
+                    errors.username
                       ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 dark:border-red-700 dark:focus:border-red-500 dark:focus:ring-red-900'
                       : 'border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-700 dark:focus:border-primary-400 dark:focus:ring-primary-900'
                   )}
-                  placeholder="you@example.com"
+                  placeholder="your_username"
+                  autoComplete="username"
                 />
               </div>
-              {errors.email && (
-                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.email}</p>
+              {errors.username && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.username}</p>
               )}
             </div>
 
-            {/* Password */}
             <div>
               <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Password
@@ -231,6 +205,7 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                       : 'border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-700 dark:focus:border-primary-400 dark:focus:ring-primary-900'
                   )}
                   placeholder="Min. 8 characters"
+                  autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
                 />
                 <button
                   type="button"
@@ -244,69 +219,8 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
                 <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.password}</p>
               )}
             </div>
-
-            {/* First Name & Last Name (register only) */}
-            {tab === 'register' && (
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    First Name
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      value={formData.firstName}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, firstName: e.target.value }))
-                      }
-                      className={cn(
-                        'w-full rounded-lg border bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 dark:bg-gray-800 dark:text-white',
-                        errors.firstName
-                          ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 dark:border-red-700'
-                          : 'border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-700'
-                      )}
-                      placeholder="John"
-                    />
-                  </div>
-                  {errors.firstName && (
-                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                      {errors.firstName}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Last Name
-                  </label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <input
-                      type="text"
-                      value={formData.lastName}
-                      onChange={(e) =>
-                        setFormData((prev) => ({ ...prev, lastName: e.target.value }))
-                      }
-                      className={cn(
-                        'w-full rounded-lg border bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 dark:bg-gray-800 dark:text-white',
-                        errors.lastName
-                          ? 'border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-200 dark:border-red-700'
-                          : 'border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-200 dark:border-gray-700'
-                      )}
-                      placeholder="Doe"
-                    />
-                  </div>
-                  {errors.lastName && (
-                    <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                      {errors.lastName}
-                    </p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Submit */}
           <button
             type="submit"
             disabled={isLoading}
@@ -317,7 +231,6 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
           </button>
         </form>
 
-        {/* Footer */}
         <div className="border-t border-gray-200 px-6 py-4 dark:border-gray-800">
           <p className="text-center text-xs text-gray-500 dark:text-gray-400">
             By continuing, you agree to our Terms of Service and Privacy Policy.
