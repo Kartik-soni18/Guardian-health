@@ -27,8 +27,17 @@ samconfig.toml
 # macOS
 .DS_Store
 
-# IDE
+# IDE / Cursor
 .vscode/
 .idea/
+.cursor/
 guardian-health-v2/
 guardian-health-v2.zip
+
+# TypeScript build info
+*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# Python venv (local)
+backend/.venv/

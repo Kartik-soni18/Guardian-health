@@ -90,6 +90,7 @@ class TriageState(TypedDict, total=False):
     # ------------------------------------------------------------------
     # Response & persistence
     # ------------------------------------------------------------------
+    structured_response: dict[str, Any] | None
     response_text: str | None
     response_data: dict[str, Any] | None
     audit_hash: str | None

@@ -56,10 +56,15 @@ async def consultation_node(state: TriageState) -> dict:
     except Exception as exc:
         logger.error("Consultation node error: %s", exc)
         fallback = {
+            "response_mode": "triage_report",
+            "triage_level": "level_4",
+            "level_title": "Less Urgent",
+            "level_justification": "Unable to complete full assessment — defaulting to cautious guidance.",
+            "immediate_actions": ["Consult a healthcare provider for personalized advice."],
+            "crucial_warnings": ["Do not self-medicate without professional guidance."],
+            "resource_recommendations": ["Primary care or urgent care as symptoms dictate."],
+            "required_follow_up": ["Any worsening or new severe symptoms."],
             "assessment": "Unable to generate detailed guidance at this time.",
-            "what_to_do": ["Consult a healthcare provider for personalized advice."],
-            "what_not_to_do": ["Do not self-medicate without professional guidance."],
-            "triage_level": "routine",
         }
         structured = build_from_consultation(fallback, state)
         return {

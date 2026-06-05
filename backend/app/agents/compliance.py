@@ -89,6 +89,16 @@ def compliance_review(triage_result: dict[str, Any]) -> dict[str, Any]:
             "modifications_made": list[str],
         }
     """
+    if triage_result.get("response_mode") == "follow_up":
+        response_text = triage_result.get("response_text", "")
+        return {
+            "approved": True,
+            "final_response": response_text,
+            "blocked_reason": None,
+            "violations": [],
+            "modifications_made": [],
+        }
+
     response_text = triage_result.get("response_text", "")
     if not response_text:
         # Build from structured fields if available

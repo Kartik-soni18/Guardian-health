@@ -6,6 +6,7 @@ import logging
 import time
 
 from app.agents.compliance import compliance_review
+from app.graph.response_builder import build_triage_response
 from app.graph.state import TriageState
 
 logger = logging.getLogger("guardian.nodes.postprocess")
@@ -19,8 +20,10 @@ async def compliance_node(state: TriageState) -> dict:
     if not response_text:
         return {}
 
+    structured = state.get("structured_response") or {}
     review_input = {
         "response_text": response_text,
+        "response_mode": structured.get("response_mode"),
         **(state.get("triage_result") or {}),
         **(state.get("consultation_result") or {}),
     }
@@ -69,9 +72,19 @@ async def assembler_node(state: TriageState) -> dict:
 
     response_text = state.get("response_text", "")
     triage_result = state.get("triage_result") or {}
+    consultation_result = state.get("consultation_result") or {}
     structured = state.get("structured_response") or {}
+    if not structured:
+        source = triage_result or consultation_result
+        if source:
+            structured = build_triage_response(source, state)
+            response_text = structured.get("response", response_text)
     final_routing = state.get("final_routing", "unknown")
-    triage_level = structured.get("triage_level") or triage_result.get("level")
+    triage_level = (
+        structured.get("triage_level")
+        or triage_result.get("triage_level")
+        or triage_result.get("level")
+    )
 
     audit_payload = {
         "user_id": state.get("user_id"),
@@ -88,9 +101,19 @@ async def assembler_node(state: TriageState) -> dict:
         "response_data": {
             "response": response_text,
             "triage_level": triage_level,
-            "care_setting": triage_result.get("care_setting"),
+            "level_title": structured.get("level_title"),
+            "level_justification": structured.get("level_justification", ""),
+            "response_mode": structured.get("response_mode", "triage_report"),
+            "needs_follow_up": structured.get("needs_follow_up", False),
+            "follow_up_questions": structured.get("follow_up_questions", []),
+            "care_setting": structured.get("care_setting") or triage_result.get("care_setting"),
             "routing": final_routing,
             "assessment": structured.get("assessment", ""),
+            "immediate_actions": structured.get("immediate_actions", []),
+            "crucial_warnings": structured.get("crucial_warnings", []),
+            "resource_recommendations": structured.get("resource_recommendations", []),
+            "required_follow_up": structured.get("required_follow_up", []),
+            "assumptions": structured.get("assumptions", []),
             "what_to_do": structured.get("what_to_do", []),
             "what_not_to_do": structured.get("what_not_to_do", []),
             "likely_conditions": structured.get("likely_conditions", []),

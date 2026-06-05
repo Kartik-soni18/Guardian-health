@@ -29,12 +29,31 @@ export interface TriageRequest {
   conversationHistory?: Array<{ role: string; content: string }>;
 }
 
+export type TriageLevel =
+  | 'level_1'
+  | 'level_2'
+  | 'level_3'
+  | 'level_4'
+  | 'level_5'
+  | 'unknown';
+
 export interface TriageResponse {
   id: string;
+  triageLevel: TriageLevel;
+  levelTitle: string;
+  levelJustification: string;
   severity: 'emergency' | 'urgent' | 'self-care' | 'unknown';
+  responseMode: 'follow_up' | 'triage_report';
+  needsFollowUp: boolean;
+  followUpQuestions: string[];
   summary: string;
   assessment: string;
   reasoning: string;
+  immediateActions: string[];
+  crucialWarnings: string[];
+  resourceRecommendations: string[];
+  requiredFollowUp: string[];
+  assumptions: string[];
   whatToDo: string[];
   whatNotToDo: string[];
   likelyConditions: string[];
@@ -42,6 +61,7 @@ export interface TriageResponse {
   remedies: string[];
   followUp: string;
   symptoms: string[];
+  careSetting?: string;
   confidence: number;
   datasetUsed: boolean;
   createdAt: string;

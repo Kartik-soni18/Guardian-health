@@ -63,7 +63,24 @@ def _check_emergency_keywords(text: str) -> bool:
     return any(kw in lowered for kw in EMERGENCY_KEYWORDS)
 
 
-async def firewall_gate(query: str, llm: AsyncLLMClient) -> dict:
+def _ongoing_medical_conversation(history: list[dict] | None) -> bool:
+    """In a health triage app, replies in an active chat are always medical."""
+    if not history or len(history) < 2:
+        return False
+    roles = {m.get("role") for m in history}
+    if "user" not in roles or "assistant" not in roles:
+        return False
+    from app.graph.conversation_context import first_user_message, looks_medical
+
+    initial = first_user_message(history)
+    return looks_medical(initial) or len(initial) > 10
+
+
+async def firewall_gate(
+    query: str,
+    llm: AsyncLLMClient,
+    conversation_history: list[dict] | None = None,
+) -> dict:
     """
     Determine if the query is medical and appropriate for triage.
 
@@ -73,6 +90,16 @@ async def firewall_gate(query: str, llm: AsyncLLMClient) -> dict:
         reason: str
         rejection_category: str | None
     """
+    # ---- Fast path: ongoing triage conversation (follow-up answers) ----
+    if _ongoing_medical_conversation(conversation_history):
+        logger.info("Firewall fast-path: ongoing medical conversation")
+        return {
+            "is_medical": True,
+            "is_emergency": _check_emergency_keywords(query),
+            "reason": "Follow-up in ongoing health conversation",
+            "rejection_category": None,
+        }
+
     # ---- Fast path: emergency keywords always pass through ----
     if _check_emergency_keywords(query):
         logger.info("Firewall fast-path: emergency keyword detected")
@@ -97,9 +124,20 @@ async def firewall_gate(query: str, llm: AsyncLLMClient) -> dict:
         }
 
     try:
+        history_snippet = ""
+        if conversation_history:
+            recent = " | ".join(
+                f"{m.get('role', '?')}: {str(m.get('content', ''))[:120]}"
+                for m in conversation_history[-4:]
+            )
+            history_snippet = f"\nConversation history: {recent}\n"
+
         result = await llm.parse_json(
             system_prompt=prompt_text,
-            user_content=f'User query: """{query}"""\n\nClassify this query.',
+            user_content=(
+                f'User query: """{query}"""{history_snippet}\n'
+                "If this is a follow-up answer in an ongoing health conversation, classify as medical."
+            ),
             node_type="firewall",
             max_tokens=256,
         )

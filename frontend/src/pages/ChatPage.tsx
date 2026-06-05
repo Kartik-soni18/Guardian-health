@@ -19,6 +19,7 @@ export function ChatPage() {
     isLoading,
     isStreaming,
     streamingContent,
+    statusMessage,
     error,
     loadChat,
     sendMessage,
@@ -124,6 +125,7 @@ export function ChatPage() {
           isLoading={isLoading}
           isStreaming={isStreaming}
           streamingContent={streamingContent}
+          statusMessage={statusMessage}
           error={error}
           onSendMessage={handleSendMessage}
           onStartChat={handleStartChat}

@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from app.agents.llm_client import AsyncLLMClient
-from app.agents.triage_agent import analyze
+from app.agents.triage_agent import _run_llm_json, analyze
 from app.graph.response_builder import build_from_triage
 from app.graph.state import TriageState
 
@@ -70,13 +70,23 @@ async def triage_node(state: TriageState) -> dict:
 
         if is_emergency:
             fallback = {
-                "level": "emergent",
-                "care_setting": "ER",
+                "response_mode": "triage_report",
+                "triage_level": "level_2",
+                "level_title": "Emergent",
+                "level_justification": "High-risk symptoms detected requiring immediate evaluation.",
+                "immediate_actions": [
+                    "Go to the nearest hospital emergency department immediately.",
+                    "Contact local emergency services (102/108 in India) if you need urgent transport.",
+                ],
+                "crucial_warnings": [
+                    "Do not delay care or drive yourself if severely unwell.",
+                ],
+                "resource_recommendations": ["Emergency Room — immediate evaluation."],
+                "required_follow_up": [
+                    "Worsening pain, difficulty breathing, confusion, or fainting.",
+                ],
                 "assessment": "Your symptoms require immediate evaluation.",
-                "explanation": "High-risk symptoms detected.",
-                "what_to_do": ["Call emergency services or go to the nearest ER immediately."],
-                "what_not_to_do": ["Do not delay care or drive yourself if severely unwell."],
-                "timeframe": "Immediately",
+                "care_setting": "ER",
                 "heuristic": True,
             }
             structured = build_from_triage(fallback, state)
@@ -88,12 +98,16 @@ async def triage_node(state: TriageState) -> dict:
             }
 
         fallback = {
-            "level": "routine",
-            "care_setting": "primary_care",
+            "response_mode": "triage_report",
+            "triage_level": "level_4",
+            "level_title": "Less Urgent",
+            "level_justification": "Symptoms warrant medical evaluation but do not suggest an immediate emergency.",
+            "immediate_actions": ["Schedule an appointment with your doctor within a few days."],
+            "crucial_warnings": ["Do not ignore worsening symptoms."],
+            "resource_recommendations": ["Primary care visit within 3–5 days."],
+            "required_follow_up": ["Sudden severe pain, high fever, or difficulty breathing."],
             "assessment": "Please consult a healthcare provider for evaluation.",
-            "what_to_do": ["Schedule an appointment with your doctor within a few days."],
-            "what_not_to_do": ["Do not ignore worsening symptoms."],
-            "timeframe": "Within 3-5 days",
+            "care_setting": "primary_care",
             "heuristic": True,
         }
         structured = build_from_triage(fallback, state)
@@ -131,7 +145,8 @@ async def diagnosed_info_node(state: TriageState) -> dict:
     llm = _get_llm()
 
     try:
-        result = await llm.parse_json(
+        result = await _run_llm_json(
+            llm,
             system_prompt=prompt_text,
             user_content=f"Provide information about: {condition}\n\nUser query: {user_input}",
             node_type="disease_info",
@@ -186,24 +201,31 @@ async def emergency_node(state: TriageState) -> dict:
     elif any(s in user_input.lower() for s in ["bleed", "blood", "hemorrhage"]):
         emergency_type = "hemorrhage"
 
-    structured = {
-        "response": f"Your symptoms suggest a {emergency_type}. Seek emergency care immediately.",
-        "triage_level": "emergent",
-        "assessment": f"{emergency_type.title()} — immediate emergency care required.",
-        "what_to_do": [
+    structured = build_from_triage({
+        "response_mode": "triage_report",
+        "triage_level": "level_2",
+        "level_title": "Emergent",
+        "level_justification": f"Symptoms suggest a {emergency_type} requiring immediate emergency care.",
+        "immediate_actions": [
             "Go to the nearest hospital emergency department immediately.",
-            "Contact local emergency services (e.g. 102/108 in India) if you need urgent transport.",
+            "Contact local emergency services (102/108 in India) if you need urgent transport.",
+            "Have someone stay with you and monitor your condition.",
         ],
-        "what_not_to_do": [
+        "crucial_warnings": [
             "Do not drive yourself if you have severe symptoms.",
             "Do not wait to see if symptoms pass.",
         ],
+        "resource_recommendations": [
+            "Emergency Room — go immediately.",
+        ],
+        "required_follow_up": [
+            "Any worsening of breathing, consciousness, pain, or bleeding.",
+        ],
+        "assessment": f"{emergency_type.title()} — immediate emergency care required.",
         "likely_conditions": [emergency_type],
-        "red_flags": symptoms,
-        "reasoning": "Emergency fast-path triggered.",
-        "confidence": 0.95,
-        "dataset_used": False,
-    }
+        "care_setting": "ER",
+        "heuristic": True,
+    }, state)
 
     logger.critical(
         "Emergency node triggered: user=%s type=%s",
@@ -213,7 +235,8 @@ async def emergency_node(state: TriageState) -> dict:
 
     return {
         "triage_result": {
-            "level": "emergent",
+            "triage_level": "level_2",
+            "level_title": "Emergent",
             "care_setting": "ER",
             "emergency_type": emergency_type,
             "heuristic": True,

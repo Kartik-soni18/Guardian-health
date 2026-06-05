@@ -1,11 +1,20 @@
-# AWS Lambda container image — use with template.yaml (not docker-compose)
+# AWS Lambda container image with Lambda Web Adapter for response streaming
 FROM public.ecr.aws/lambda/python:3.12-arm64
+
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 
 COPY backend/requirements.txt ${LAMBDA_TASK_ROOT}/
 RUN pip install --no-cache-dir -r ${LAMBDA_TASK_ROOT}/requirements.txt
 
 COPY backend/app ${LAMBDA_TASK_ROOT}/app
 COPY backend/data ${LAMBDA_TASK_ROOT}/data
-COPY backend/handler.py ${LAMBDA_TASK_ROOT}/handler.py
+COPY backend/run.sh ${LAMBDA_TASK_ROOT}/run.sh
+RUN chmod +x ${LAMBDA_TASK_ROOT}/run.sh
 
-CMD ["handler.handler"]
+ENV PORT=8080
+ENV AWS_LWA_INVOKE_MODE=response_stream
+ENV AWS_LWA_READINESS_CHECK_PATH=/health
+ENV AWS_LWA_READINESS_CHECK_PORT=8080
+
+# Python base image treats CMD as module.handler — run uvicorn via bash instead.
+ENTRYPOINT ["/bin/bash", "/var/task/run.sh"]

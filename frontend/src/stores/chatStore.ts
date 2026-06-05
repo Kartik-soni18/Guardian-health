@@ -8,6 +8,7 @@ interface ChatState {
   isLoading: boolean;
   isStreaming: boolean;
   streamingContent: string;
+  statusMessage: string;
   error: string | null;
 
   setChats: (chats: Chat[]) => void;
@@ -19,6 +20,7 @@ interface ChatState {
   updateMessage: (messageId: string, updates: Partial<ChatMessage>) => void;
   appendStreamingContent: (chunk: string) => void;
   setStreamingContent: (content: string) => void;
+  setStatusMessage: (message: string) => void;
   setIsLoading: (loading: boolean) => void;
   setIsStreaming: (streaming: boolean) => void;
   setError: (error: string | null) => void;
@@ -32,6 +34,7 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
   isLoading: false,
   isStreaming: false,
   streamingContent: '',
+  statusMessage: '',
   error: null,
 
   setChats: (chats) => set({ chats }),
@@ -93,6 +96,8 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
 
   setStreamingContent: (content) => set({ streamingContent: content }),
 
+  setStatusMessage: (message) => set({ statusMessage: message }),
+
   setIsLoading: (loading) => set({ isLoading: loading }),
 
   setIsStreaming: (streaming) => set({ isStreaming: streaming }),
@@ -103,5 +108,6 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
     set({
       isStreaming: false,
       streamingContent: '',
+      statusMessage: '',
     }),
 }));

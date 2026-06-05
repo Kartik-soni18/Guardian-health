@@ -7,14 +7,16 @@
 | Layer | Target | Config |
 |---|---|---|
 | Frontend | GitHub Pages | `.github/workflows/deploy.yml` |
-| Backend | AWS Lambda | `template.yaml` + ECR container image |
+| Backend | AWS Lambda Function URL | `template.yaml` + ECR container image (Lambda Web Adapter) |
 
 ## Frontend — GitHub Pages
 
 1. Enable GitHub Pages on the repository (source: `gh-pages` branch).
-2. Set repository variable `VITE_API_URL` to your Lambda API URL with `/api/v1` suffix:
+2. Set repository variables:
+   - `VITE_API_URL` — Lambda Function URL + `/api/v1`
+   - `VITE_STREAM_API_URL` — same value (streaming uses the same endpoint)
    ```
-   https://your-api.execute-api.ap-southeast-2.amazonaws.com/prod/api/v1
+   https://<id>.lambda-url.ap-southeast-2.on.aws/api/v1
    ```
 3. Push to `main` — the workflow builds and publishes `frontend/dist`.
 
@@ -56,9 +58,11 @@ sam deploy \
     AllowedOrigins=https://your-user.github.io
 ```
 
-### Lambda handler
+### Lambda runtime
 
-The container entry point for Lambda is `handler.handler` (Mangum wrapping the FastAPI app). For local uvicorn, use `app.main:app` as usual.
+The container runs **uvicorn** via Lambda Web Adapter (`backend/run.sh`) with `AWS_LWA_INVOKE_MODE=response_stream` for SSE streaming. A Lambda Function URL is created for streaming; API Gateway handles all other routes.
+
+For local development, use `uvicorn app.main:app --reload` from the `backend/` directory.
 
 ### CORS
 

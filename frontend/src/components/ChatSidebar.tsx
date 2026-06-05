@@ -90,8 +90,8 @@ export function ChatSidebar({
             : 'hidden md:flex'
         )}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-800">
+        {/* Header — height matches chat panel header */}
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-4 dark:border-gray-800">
           {!collapsed && (
             <>
               <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -265,12 +265,12 @@ export function ChatSidebar({
           </div>
         )}
 
-        {/* Footer */}
+        {/* Footer — padding matches chat input bar */}
         {!collapsed && (
-          <div className="border-t border-gray-200 p-3 dark:border-gray-800">
+          <div className="shrink-0 border-t border-gray-200/80 px-4 py-4 dark:border-gray-800">
             <button
               onClick={handleNewChat}
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-gray-700 dark:text-gray-500 dark:hover:border-primary-600 dark:hover:text-primary-400"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-gray-700 dark:text-gray-500 dark:hover:border-primary-600 dark:hover:text-primary-400"
             >
               <Plus className="h-4 w-4" />
               New Conversation

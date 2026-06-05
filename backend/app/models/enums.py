@@ -4,50 +4,55 @@ from enum import Enum
 
 
 class TriageLevel(str, Enum):
-    """Emergency Severity Index (ESI) inspired triage levels.
+    """5-level emergency triage scale (ESI-inspired)."""
 
-    Levels range from EMERGENCY (immediate life threat) to
-    SELF_CARE (mild, self-limiting symptoms).
-    """
+    LEVEL_1 = "level_1"  # Resuscitation — imminent life threat
+    LEVEL_2 = "level_2"  # Emergent — high risk, rapid deterioration
+    LEVEL_3 = "level_3"  # Urgent — multiple resources needed
+    LEVEL_4 = "level_4"  # Less Urgent — single resource
+    LEVEL_5 = "level_5"  # Non-Urgent — exam/advice only
+    UNKNOWN = "unknown"
 
-    EMERGENCY = "emergency"          # ESI 1: Life-threatening, immediate intervention
-    URGENT = "urgent"                # ESI 2: High risk, dangerous presentation
-    PROMPT = "prompt"                # ESI 3: Multiple resources, stable vitals
-    LESS_URGENT = "less_urgent"      # ESI 4: Single resource likely
-    NON_URGENT = "non_urgent"        # ESI 5: No resources, self-care
-    SELF_CARE = "self_care"          # Minor, OTC/self-management sufficient
-    UNKNOWN = "unknown"              # Insufficient information to classify
+
+TRIAGE_LEVEL_TITLES: dict[str, str] = {
+    TriageLevel.LEVEL_1: "Resuscitation",
+    TriageLevel.LEVEL_2: "Emergent",
+    TriageLevel.LEVEL_3: "Urgent",
+    TriageLevel.LEVEL_4: "Less Urgent",
+    TriageLevel.LEVEL_5: "Non-Urgent",
+    TriageLevel.UNKNOWN: "Unclassified",
+}
 
 
 class ChatStatus(str, Enum):
     """Lifecycle states for a patient chat session."""
 
-    ACTIVE = "active"                # Ongoing conversation
-    PAUSED = "paused"                # Temporarily suspended (e.g., awaiting follow-up)
-    CLOSED = "closed"                # Completed normally
-    ARCHIVED = "archived"            # Long-term storage, read-only
-    FLAGGED = "flagged"              # Manually flagged for clinical review
+    ACTIVE = "active"
+    PAUSED = "paused"
+    CLOSED = "closed"
+    ARCHIVED = "archived"
+    FLAGGED = "flagged"
 
 
 class UserRole(str, Enum):
     """RBAC roles within the GuardianHealth platform."""
 
-    PATIENT = "patient"              # Standard end-user seeking triage
-    CLINICIAN = "clinician"          # Licensed provider with elevated access
-    ADMIN = "admin"                  # Platform administrator
-    RESEARCHER = "researcher"        # Data/research access (de-identified)
+    PATIENT = "patient"
+    CLINICIAN = "clinician"
+    ADMIN = "admin"
+    RESEARCHER = "researcher"
 
 
 class RoutingDecision(str, Enum):
     """Recommended care routing outcome from the triage engine."""
 
-    CALL_911 = "call_911"            # Immediate EMS activation
-    ED_NOW = "ed_now"                # Emergency department — go now
-    ED_SAME_DAY = "ed_same_day"      # Emergency department — same day
-    URGENT_CARE = "urgent_care"      # Urgent care or walk-in clinic
-    PRIMARY_CARE = "primary_care"    # Primary care / GP visit
-    SELF_CARE = "self_care"          # Home management with OTC
-    TELEMEDICINE = "telemedicine"    # Virtual visit appropriate
-    PHARMACY = "pharmacy"            # Pharmacist consultation
-    FOLLOW_UP = "follow_up"          # Schedule routine follow-up
-    NONE = "none"                    # No routing indicated
+    CALL_911 = "call_911"
+    ED_NOW = "ed_now"
+    ED_SAME_DAY = "ed_same_day"
+    URGENT_CARE = "urgent_care"
+    PRIMARY_CARE = "primary_care"
+    SELF_CARE = "self_care"
+    TELEMEDICINE = "telemedicine"
+    PHARMACY = "pharmacy"
+    FOLLOW_UP = "follow_up"
+    NONE = "none"

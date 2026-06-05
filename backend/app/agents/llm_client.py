@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import time
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -45,16 +46,38 @@ MOCK_RESPONSES: dict[str, str] = {
         "confidence": 0.7,
     }),
     "consultation": json.dumps({
-        "assessment": "Likely benign headache.",
-        "plan": "Rest, hydration, OTC analgesics.",
-        "references": [],
+        "response_mode": "follow_up",
+        "follow_up_questions": [
+            "How severe is the headache on a scale of 1–10?",
+            "Do you have any neck stiffness, fever, or vision changes?",
+            "How long have you had this headache?",
+        ],
+        "preliminary_assessment": "A headache can have many causes — I need a few details to triage safely.",
+        "likely_conditions": ["tension headache"],
     }),
     "triage": json.dumps({
-        "level": "routine",
-        "care_setting": "self_care",
-        "explanation": "Mild symptoms manageable at home.",
-        "action": "Rest and monitor.",
-        "wait_time": "N/A",
+        "response_mode": "triage_report",
+        "triage_level": "level_5",
+        "level_title": "Non-Urgent",
+        "level_justification": "Mild headache without red flags suggests a non-urgent presentation.",
+        "immediate_actions": [
+            "Rest in a quiet, dark room.",
+            "Stay hydrated and avoid screen time.",
+            "Consider OTC analgesics if you have no contraindications.",
+        ],
+        "crucial_warnings": [
+            "Do not ignore a sudden, severe 'thunderclap' headache.",
+        ],
+        "resource_recommendations": [
+            "Home care with self-monitoring.",
+            "Primary care if headache persists beyond 5 days.",
+        ],
+        "required_follow_up": [
+            "Sudden severe headache, fever with neck stiffness, vision loss, or confusion.",
+        ],
+        "assessment": "Likely benign tension-type headache manageable with self-care.",
+        "likely_conditions": ["tension headache"],
+        "care_setting": "home_care",
     }),
     "disease_info": json.dumps({
         "condition": "Tension Headache",
@@ -156,6 +179,91 @@ class AsyncLLMClient:
             logger.error("LLM FAILED node=%s error=%s", node_type, exc)
             raise
 
+    async def stream_tokens(
+        self,
+        system_prompt: str,
+        user_content: str,
+        node_type: str,
+        max_tokens: int = 1024,
+    ) -> AsyncIterator[str]:
+        if self.mock_mode:
+            logger.info("[MOCK STREAM] node_type=%s", node_type)
+            raw = MOCK_RESPONSES.get(
+                node_type,
+                json.dumps({"mock": True, "node_type": node_type}),
+            )
+            for index in range(0, len(raw), 24):
+                await asyncio.sleep(0.03)
+                yield raw[index : index + 24]
+            return
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_content},
+            ],
+            "temperature": TEMPERATURE_PROFILES.get(node_type, 0.3),
+            "max_tokens": max_tokens,
+            "stream": True,
+        }
+
+        start = time.perf_counter()
+        try:
+            async with self.client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                json=payload,
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        chunk = json.loads(data)
+                        delta = chunk["choices"][0]["delta"].get("content", "")
+                        if delta:
+                            yield delta
+                    except (json.JSONDecodeError, KeyError, IndexError):
+                        continue
+            logger.info(
+                "LLM stream ok node=%s latency=%.1fms",
+                node_type,
+                (time.perf_counter() - start) * 1000,
+            )
+        except Exception as exc:
+            logger.error("LLM STREAM FAILED node=%s error=%s", node_type, exc)
+            raise
+
+    async def collect_stream(
+        self,
+        system_prompt: str,
+        user_content: str,
+        node_type: str,
+        max_tokens: int = 1024,
+    ) -> str:
+        parts: list[str] = []
+        async for token in self.stream_tokens(
+            system_prompt,
+            user_content,
+            node_type,
+            max_tokens=max_tokens,
+        ):
+            parts.append(token)
+        return "".join(parts)
+
+    def _parse_json_raw(self, raw: str) -> dict[str, Any]:
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            repaired = json_repair.repair_json(raw)
+            if isinstance(repaired, str):
+                return json.loads(repaired)
+            return repaired
+
     async def parse_json(
         self,
         system_prompt: str,
@@ -164,10 +272,19 @@ class AsyncLLMClient:
         max_tokens: int = 1024,
     ) -> dict[str, Any]:
         raw = await self.call(system_prompt, user_content, node_type, max_tokens)
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            repaired = json_repair.repair_json(raw)
-            if isinstance(repaired, str):
-                return json.loads(repaired)
-            return repaired
+        return self._parse_json_raw(raw)
+
+    async def parse_json_stream(
+        self,
+        system_prompt: str,
+        user_content: str,
+        node_type: str,
+        max_tokens: int = 1024,
+    ) -> dict[str, Any]:
+        raw = await self.collect_stream(
+            system_prompt,
+            user_content,
+            node_type,
+            max_tokens=max_tokens,
+        )
+        return self._parse_json_raw(raw)

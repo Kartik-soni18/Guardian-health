@@ -24,8 +24,11 @@ export function useChat() {
     setCurrentChat,
     setMessages,
     addMessage,
+    statusMessage,
     setIsStreaming,
     setStreamingContent,
+    setStatusMessage,
+    appendStreamingContent,
     setError,
     clearStreaming,
   } = useChatStore();
@@ -53,32 +56,67 @@ export function useChat() {
       addMessage(userMessage);
       setIsStreaming(true);
       setStreamingContent('');
+      setStatusMessage('');
 
       const history = [...messages, userMessage];
+      const request = { query: content, symptoms: content } as TriageRequest;
+      const options = { chatId, history };
 
-      try {
-        const triage = await triageService.submitTriage(
-          { query: content, symptoms: content } as TriageRequest,
-          { chatId, history }
-        );
-
+      const addAssistantMessage = (triage: Awaited<ReturnType<typeof triageService.submitTriage>>) => {
         const assistantMessage: ChatMessage = {
           id: crypto.randomUUID(),
           chatId,
           role: 'assistant',
-          content: triage.assessment || triage.summary,
-          triage,
+          content: triage.summary || triage.assessment,
+          triage: triage.needsFollowUp ? null : triage,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
         addMessage(assistantMessage);
+      };
+
+      try {
+        let triage = await triageService.streamTriage(
+          request,
+          {
+            onStatus: setStatusMessage,
+            onChunk: appendStreamingContent,
+          },
+          options
+        );
+
+        if (!triage) {
+          triage = await triageService.submitTriage(request, options);
+        }
+
+        addAssistantMessage(triage);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to send message');
+        try {
+          const triage = await triageService.submitTriage(request, options);
+          addAssistantMessage(triage);
+        } catch (fallbackErr) {
+          setError(
+            fallbackErr instanceof Error
+              ? fallbackErr.message
+              : err instanceof Error
+                ? err.message
+                : 'Failed to send message'
+          );
+        }
       } finally {
         clearStreaming();
       }
     },
-    [addMessage, clearStreaming, messages, setError, setIsStreaming, setStreamingContent]
+    [
+      addMessage,
+      appendStreamingContent,
+      clearStreaming,
+      messages,
+      setError,
+      setIsStreaming,
+      setStatusMessage,
+      setStreamingContent,
+    ]
   );
 
   const createNewChat = useCallback(
@@ -111,6 +149,7 @@ export function useChat() {
     isLoading,
     isStreaming,
     streamingContent,
+    statusMessage,
     error,
     loadChat,
     sendMessage,

@@ -1,17 +1,17 @@
 """
-Triage Agent — Provides clinical consultation and triage analysis.
-
-Two main modes:
-1. consult(): Full consultation with context building
-2. analyze(): Structured triage level assignment
+Triage Agent — Emergency medical triage with 5-level classification.
 """
 
-
+import asyncio
 import logging
 from pathlib import Path
 from typing import Any
 
 from app.agents.llm_client import AsyncLLMClient
+from app.graph.response_builder import format_follow_up, format_triage_report
+from app.graph.stream_context import get_stream_emit
+from app.graph.streaming import emit_text_chunks
+from app.models.enums import TriageLevel
 
 logger = logging.getLogger("guardian.triage")
 
@@ -20,9 +20,6 @@ CONSULTATION_PROMPT_PATH = (
 )
 TRIAGE_PROMPT_PATH = (
     Path(__file__).with_suffix("").parent / "prompts" / "triage.txt"
-)
-SCRATCHPAD_PROMPT_PATH = (
-    Path(__file__).with_suffix("").parent / "prompts" / "scratchpad.txt"
 )
 
 
@@ -36,12 +33,16 @@ def _build_context(
     scratchpad: dict[str, Any] | None = None,
 ) -> str:
     """Build compact context for LLM prompts."""
-    lines = [f"Query: {scrubbed}"]
+    user_turns = sum(1 for msg in history if msg.get("role") == "user")
+    lines = [
+        f"Query: {scrubbed}",
+        f"Conversation turns (user): {user_turns + 1}",
+    ]
 
     if history:
         recent = " | ".join(
-            f"{msg.get('role', '?')}: {msg.get('content', '')[:100]}"
-            for msg in history[-3:]
+            f"{msg.get('role', '?')}: {msg.get('content', '')[:150]}"
+            for msg in history[-5:]
         )
         lines.append(f"History: {recent}")
 
@@ -74,61 +75,198 @@ def _build_context(
         diffs = scratchpad.get("differentials") or []
         if diffs:
             lines.append(f"Differentials: {', '.join(str(d) for d in diffs[:3])}")
+        missing = scratchpad.get("missing_info") or []
+        if missing:
+            lines.append(f"Missing info: {', '.join(str(m) for m in missing[:4])}")
 
     if ml_confidence < 0.5:
         lines.append("Dataset confidence is LOW — use clinical reasoning to infer likely conditions.")
+
+    if user_turns <= 1:
+        lines.append(
+            "NOTE: First user message — prefer follow_up mode unless symptoms clearly indicate emergency."
+        )
+    else:
+        lines.append(
+            "NOTE: Patient has answered follow-up questions — you MUST produce triage_report mode with full 5-level assessment."
+        )
 
     return "\n".join(lines)
 
 
 def _heuristic_triage(symptoms: list[str], severity: str | None = None) -> dict[str, Any]:
     """Heuristic fallback triage when LLM fails."""
-    emergent_keywords = {
+    level_1_keywords = {
+        "not_breathing", "unresponsive", "pulseless", "cardiac_arrest",
+        "anaphylaxis", "choking",
+    }
+    level_2_keywords = {
         "chest_pain", "shortness_of_breath", "syncope", "seizure",
-        "cyanosis", "severe_bleeding", "suicidal_ideation", "anaphylaxis",
-        "stroke", "dyspnea",
+        "cyanosis", "severe_bleeding", "suicidal_ideation", "stroke",
+        "dyspnea", "altered_mental_status",
     }
-    urgent_keywords = {
+    level_3_keywords = {
         "fever", "dehydration", "vomiting", "severe_abdominal_pain",
-        "altered_mental_status", "vision_loss", "petechiae",
+        "vision_loss", "petechiae",
     }
 
-    symptom_set = set(s.lower().replace(" ", "_") for s in symptoms)
+    symptom_set = {s.lower().replace(" ", "_") for s in symptoms}
 
-    if symptom_set & emergent_keywords or severity == "severe":
+    if symptom_set & level_1_keywords:
         return {
-            "level": "emergent",
+            "response_mode": "triage_report",
+            "triage_level": TriageLevel.LEVEL_1.value,
+            "level_title": "Resuscitation",
+            "level_justification": "Symptoms suggest an imminent life-threatening condition.",
+            "immediate_actions": [
+                "Contact local emergency services (102/108 in India) immediately.",
+                "Begin CPR if the person is unresponsive and not breathing.",
+                "Do not leave the person alone.",
+            ],
+            "crucial_warnings": [
+                "Do not delay calling for emergency help.",
+                "Do not attempt to move someone with suspected spinal injury.",
+            ],
+            "resource_recommendations": [
+                "Nearest hospital emergency department — go immediately.",
+            ],
+            "required_follow_up": [
+                "Any loss of consciousness, worsening breathing, or no pulse.",
+            ],
+            "assessment": "Critical emergency features detected requiring immediate resuscitation-level response.",
             "care_setting": "ER",
-            "explanation": "Your symptoms include features that require immediate emergency evaluation.",
-            "action": "Seek emergency care immediately or call emergency services.",
-            "timeframe": "Immediately",
-            "red_flags": list(symptom_set & emergent_keywords),
-            "safety_net": "If symptoms worsen while waiting, call emergency services.",
             "heuristic": True,
         }
 
-    if symptom_set & urgent_keywords or severity == "moderate":
+    if symptom_set & level_2_keywords or severity == "severe":
         return {
-            "level": "urgent",
+            "response_mode": "triage_report",
+            "triage_level": TriageLevel.LEVEL_2.value,
+            "level_title": "Emergent",
+            "level_justification": "High-risk symptoms that may deteriorate rapidly without immediate care.",
+            "immediate_actions": [
+                "Go to the nearest hospital emergency department immediately.",
+                "Contact local emergency services (102/108 in India) if you need urgent transport.",
+                "Have someone stay with you and monitor your condition.",
+            ],
+            "crucial_warnings": [
+                "Do not drive yourself if you have severe symptoms.",
+                "Do not wait to see if symptoms pass on their own.",
+            ],
+            "resource_recommendations": [
+                "Emergency Room — immediate evaluation required.",
+            ],
+            "required_follow_up": [
+                "Worsening pain, difficulty breathing, confusion, or fainting.",
+            ],
+            "assessment": "Your symptoms require emergent medical evaluation.",
+            "care_setting": "ER",
+            "heuristic": True,
+        }
+
+    if symptom_set & level_3_keywords or severity == "moderate":
+        return {
+            "response_mode": "triage_report",
+            "triage_level": TriageLevel.LEVEL_3.value,
+            "level_title": "Urgent",
+            "level_justification": "Symptoms need prompt medical evaluation with multiple resources.",
+            "immediate_actions": [
+                "Visit an urgent care center or emergency department today.",
+                "Monitor vital signs if possible (temperature, pulse).",
+                "Stay hydrated and rest while arranging care.",
+            ],
+            "crucial_warnings": [
+                "Do not ignore worsening symptoms.",
+                "Do not self-medicate with prescription drugs without guidance.",
+            ],
+            "resource_recommendations": [
+                "Urgent Care or Emergency Department — same-day evaluation.",
+                "A thermometer and pulse oximeter may help monitor your condition.",
+            ],
+            "required_follow_up": [
+                "High fever, persistent vomiting, severe pain, or confusion.",
+            ],
+            "assessment": "Your symptoms should be evaluated promptly by a medical professional.",
             "care_setting": "urgent_care",
-            "explanation": "Your symptoms should be evaluated promptly by a medical professional.",
-            "action": "Visit an urgent care center or schedule a same-day appointment.",
-            "timeframe": "Within 24 hours",
-            "red_flags": list(symptom_set & urgent_keywords),
-            "safety_net": "Go to the emergency department if symptoms worsen significantly.",
+            "heuristic": True,
+        }
+
+    if severity == "mild" or symptom_set:
+        return {
+            "response_mode": "triage_report",
+            "triage_level": TriageLevel.LEVEL_5.value,
+            "level_title": "Non-Urgent",
+            "level_justification": "Symptoms appear mild and manageable with self-care or routine evaluation.",
+            "immediate_actions": [
+                "Rest and monitor symptoms at home.",
+                "Stay hydrated and maintain adequate nutrition.",
+                "Use OTC remedies as appropriate for your symptoms.",
+            ],
+            "crucial_warnings": [
+                "Do not ignore symptoms that worsen suddenly.",
+            ],
+            "resource_recommendations": [
+                "Home care with self-monitoring.",
+                "Primary care visit if symptoms persist beyond 5–7 days.",
+                "A thermometer may help track fever.",
+            ],
+            "required_follow_up": [
+                "Sudden severe pain, high fever, difficulty breathing, or new alarming symptoms.",
+            ],
+            "assessment": "Your symptoms appear non-urgent but should be monitored.",
+            "care_setting": "home_care",
             "heuristic": True,
         }
 
     return {
-        "level": "routine",
-        "care_setting": "primary_care",
-        "explanation": "Your symptoms do not suggest an immediate emergency but should be evaluated.",
-        "action": "Schedule an appointment with your primary care provider.",
-        "timeframe": "Within 3-5 days",
-        "red_flags": [],
-        "safety_net": "Seek urgent care if symptoms worsen or new symptoms develop.",
+        "response_mode": "follow_up",
+        "follow_up_questions": [
+            "What is your main symptom right now?",
+            "How long have you had these symptoms?",
+            "Are you experiencing any difficulty breathing, chest pain, or severe bleeding?",
+        ],
+        "preliminary_assessment": "I need a few more details to assess your situation safely.",
         "heuristic": True,
     }
+
+
+async def _run_llm_json(
+    llm: AsyncLLMClient,
+    *,
+    system_prompt: str,
+    user_content: str,
+    node_type: str,
+    max_tokens: int,
+) -> dict[str, Any]:
+    emit = get_stream_emit()
+    final_nodes = {"consultation", "triage", "disease_info"}
+
+    if emit and node_type in final_nodes:
+        status = emit({"type": "status", "message": "Writing your response..."})
+        if asyncio.iscoroutine(status):
+            await status
+        result = await llm.parse_json_stream(
+            system_prompt=system_prompt,
+            user_content=user_content,
+            node_type=node_type,
+            max_tokens=max_tokens,
+        )
+        mode = (result.get("response_mode") or "triage_report").lower()
+        if mode == "follow_up":
+            visible = format_follow_up(result)
+        elif node_type == "disease_info":
+            visible = result.get("description") or f"Information about {result.get('condition', 'this condition')}."
+        else:
+            visible = format_triage_report(result)
+        await emit_text_chunks(emit, visible)
+        return result
+
+    return await llm.parse_json(
+        system_prompt=system_prompt,
+        user_content=user_content,
+        node_type=node_type,
+        max_tokens=max_tokens,
+    )
 
 
 async def consult(
@@ -140,31 +278,14 @@ async def consult(
     clinical_entities: dict[str, Any] | None = None,
     scratchpad: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    Provide a full clinical consultation.
-
-    Args:
-        scrubbed: Scrubbed user input.
-        history: Conversation history.
-        top_predictions: ML model top predictions.
-        ml_confidence: Overall ML confidence score.
-        llm: AsyncLLMClient.
-
-    Returns:
-        Consultation result dict.
-    """
     try:
         prompt_text = CONSULTATION_PROMPT_PATH.read_text(encoding="utf-8")
     except FileNotFoundError:
         logger.error("Consultation prompt not found")
-        return {
-            "assessment": "Consultation service temporarily unavailable.",
-            "key_concerns": [],
-            "plan": "Please consult a healthcare provider directly.",
-            "when_to_seek": "If you feel your condition is urgent, seek immediate care.",
-            "references": [],
-            "follow_up_questions": ["Can you describe your symptoms in more detail?"],
-        }
+        return _heuristic_triage(
+            symptoms=(clinical_entities or {}).get("symptoms", []),
+            severity=(clinical_entities or {}).get("severity"),
+        )
 
     context = _build_context(
         scrubbed=scrubbed,
@@ -176,25 +297,21 @@ async def consult(
     )
 
     try:
-        result = await llm.parse_json(
+        result = await _run_llm_json(
+            llm,
             system_prompt=prompt_text,
             user_content=context,
             node_type="consultation",
-            max_tokens=1024,
+            max_tokens=1536,
         )
         result["heuristic"] = False
         return result
     except Exception as exc:
         logger.error("Consultation LLM call failed: %s", exc)
-        return {
-            "assessment": "Unable to generate full consultation at this time.",
-            "key_concerns": [p.get("condition", "unknown") for p in top_predictions[:3]],
-            "plan": "Please consult a healthcare provider for personalized advice.",
-            "when_to_seek": "Seek immediate care for severe or worsening symptoms.",
-            "references": [],
-            "follow_up_questions": ["Can you describe your main symptom?", "How long have you had these symptoms?"],
-            "heuristic": True,
-        }
+        return _heuristic_triage(
+            symptoms=(clinical_entities or {}).get("symptoms", []),
+            severity=(clinical_entities or {}).get("severity"),
+        )
 
 
 async def analyze(
@@ -205,19 +322,6 @@ async def analyze(
     llm: AsyncLLMClient,
     scratchpad: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    Analyze and assign triage level.
-
-    Args:
-        scrubbed: Scrubbed user input.
-        history: Conversation history.
-        clinical_entities: Extracted clinical entities.
-        ml_prediction: ML prediction dict with top_predictions.
-        llm: AsyncLLMClient.
-
-    Returns:
-        Triage analysis dict with level, care_setting, etc.
-    """
     try:
         prompt_text = TRIAGE_PROMPT_PATH.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -244,11 +348,12 @@ async def analyze(
     )
 
     try:
-        result = await llm.parse_json(
+        result = await _run_llm_json(
+            llm,
             system_prompt=prompt_text,
             user_content=context,
             node_type="triage",
-            max_tokens=768,
+            max_tokens=1536,
         )
         result["heuristic"] = False
         return result

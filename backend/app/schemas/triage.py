@@ -22,14 +22,25 @@ class TriageRequest(BaseModel):
 class TriageResponse(BaseModel):
     response: str
     triage_level: Optional[str] = None
+    level_title: Optional[str] = None
+    level_justification: str = ""
+    response_mode: str = "triage_report"
+    needs_follow_up: bool = False
+    follow_up_questions: List[str] = Field(default_factory=list)
     routing: str = "unknown"
     symptoms: List[str] = Field(default_factory=list)
     assessment: str = ""
     reasoning: str = ""
+    immediate_actions: List[str] = Field(default_factory=list)
+    crucial_warnings: List[str] = Field(default_factory=list)
+    resource_recommendations: List[str] = Field(default_factory=list)
+    required_follow_up: List[str] = Field(default_factory=list)
+    assumptions: List[str] = Field(default_factory=list)
     what_to_do: List[str] = Field(default_factory=list)
     what_not_to_do: List[str] = Field(default_factory=list)
     likely_conditions: List[str] = Field(default_factory=list)
     red_flags: List[str] = Field(default_factory=list)
+    care_setting: Optional[str] = None
     confidence: float = 0.0
     dataset_used: bool = False
     compliance_passed: bool = True

@@ -12,6 +12,7 @@ import logging
 from app.agents.firewall import firewall_gate
 from app.agents.llm_client import AsyncLLMClient
 from app.agents.privacy import scrub_pii
+from app.graph.conversation_context import build_effective_query
 from app.graph.state import TriageState
 
 logger = logging.getLogger("guardian.nodes.preprocess")
@@ -73,10 +74,11 @@ async def firewall_node(state: TriageState) -> dict:
         return {}
 
     user_input = state["user_input"]
+    history = state.get("conversation_history", [])
     llm = _get_llm()
 
     try:
-        result = await firewall_gate(user_input, llm)
+        result = await firewall_gate(user_input, llm, conversation_history=history)
         return {
             "is_medical": result["is_medical"],
             "is_emergency": state.get("is_emergency", False) or result.get("is_emergency", False),
@@ -107,8 +109,11 @@ async def privacy_node(state: TriageState) -> dict:
         # Non-medical query, no need to scrub
         return {"scrubbed_input": state["user_input"]}
 
+    history = state.get("conversation_history", [])
+    effective_query = build_effective_query(state["user_input"], history)
+
     try:
-        result = await scrub_pii(state["user_input"])
+        result = await scrub_pii(effective_query)
         return {
             "scrubbed_input": result["scrubbed_text"],
             "pii_detected": result["pii_detected"],
