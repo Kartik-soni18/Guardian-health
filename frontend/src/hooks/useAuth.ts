@@ -8,7 +8,18 @@ import { LoginCredentials, RegisterData } from '@/types';
 
 export function useAuth() {
   const queryClient = useQueryClient();
-  const { user, isAuthenticated, isLoading, login, register: registerStore, logout: logoutStore, setUser, setLoading } = useAuthStore();
+  const {
+    user,
+    isAuthenticated,
+    isLoading,
+    hasHydrated,
+    login,
+    restoreSession,
+    register: registerStore,
+    logout: logoutStore,
+    setUser,
+    setLoading,
+  } = useAuthStore();
 
   const meQuery = useQuery({
     queryKey: ['auth', 'me'],
@@ -59,34 +70,40 @@ export function useAuth() {
 
   const initAuth = useCallback(() => {
     const { accessToken, refreshToken } = useAuthStore.getState();
-    if (accessToken) {
-      setLoading(true);
-      authService
-        .getMe()
-        .then((userData) => {
-          if (refreshToken) {
-            login(accessToken, refreshToken);
-          }
-          setUser(userData);
-        })
-        .catch((error: unknown) => {
-          const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-          if (status === 401) {
-            logoutStore();
-          }
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
+
+    if (!accessToken) {
       setLoading(false);
+      return;
     }
-  }, [setLoading, setUser, login, logoutStore]);
+
+    setLoading(true);
+    authService
+      .getMe()
+      .then((userData) => {
+        const current = useAuthStore.getState();
+        restoreSession(current.accessToken ?? accessToken, current.refreshToken ?? refreshToken, userData);
+      })
+      .catch((error: unknown) => {
+        const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+        if (status === 401) {
+          const stillHasSession = useAuthStore.getState().accessToken;
+          if (!stillHasSession) {
+            return;
+          }
+          logoutStore();
+        }
+      })
+      .finally(() => {
+        setLoading(false);
+      });
+  }, [setLoading, restoreSession, logoutStore]);
+
+  const isBootstrapping = !hasHydrated || isLoading || meQuery.isLoading;
 
   return {
     user,
     isAuthenticated,
-    isLoading: isLoading || meQuery.isLoading,
+    isLoading: isBootstrapping,
     login: loginMutation.mutateAsync,
     register: registerMutation.mutateAsync,
     logout: logoutMutation.mutate,

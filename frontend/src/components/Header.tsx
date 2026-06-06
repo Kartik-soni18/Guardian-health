@@ -98,7 +98,9 @@ export function Header() {
             </button>
 
             <div className="mt-4 border-t border-gray-200 pt-4 dark:border-gray-800">
-              {isAuthenticated && user ? (
+              {isLoading ? (
+                <div className="h-10 w-full animate-pulse rounded-lg bg-gray-200 dark:bg-gray-800" />
+              ) : isAuthenticated && user ? (
                 <button
                   onClick={handleLogout}
                   className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-2.5 text-sm font-medium text-gray-700 dark:border-gray-700 dark:text-gray-300"

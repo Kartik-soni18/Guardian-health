@@ -11,10 +11,12 @@ interface AuthState {
   hasHydrated: boolean;
 
   login: (accessToken: string, refreshToken: string) => void;
+  restoreSession: (accessToken: string, refreshToken: string | null, user: User) => void;
   setUser: (user: User | null) => void;
   register: (accessToken: string, refreshToken: string) => void;
   logout: () => void;
   setLoading: (loading: boolean) => void;
+  setHydrated: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -24,13 +26,22 @@ export const useAuthStore = create<AuthState>()(
       accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
-      isLoading: true,
+      isLoading: false,
       hasHydrated: false,
 
       login: (accessToken: string, refreshToken: string) =>
         set({
           accessToken,
           refreshToken,
+          isAuthenticated: true,
+          isLoading: false,
+        }),
+
+      restoreSession: (accessToken: string, refreshToken: string | null, user: User) =>
+        set({
+          accessToken,
+          refreshToken,
+          user,
           isAuthenticated: true,
           isLoading: false,
         }),
@@ -55,6 +66,8 @@ export const useAuthStore = create<AuthState>()(
         }),
 
       setLoading: (loading: boolean) => set({ isLoading: loading }),
+
+      setHydrated: () => set({ hasHydrated: true }),
     }),
     {
       name: 'auth-storage',
@@ -62,17 +75,6 @@ export const useAuthStore = create<AuthState>()(
         accessToken: state.accessToken,
         refreshToken: state.refreshToken,
       }),
-      onRehydrateStorage: () => () => {
-        useAuthStore.setState({ hasHydrated: true });
-      },
     }
   )
 );
-
-if (useAuthStore.persist.hasHydrated()) {
-  useAuthStore.setState({ hasHydrated: true });
-} else {
-  useAuthStore.persist.onFinishHydration(() => {
-    useAuthStore.setState({ hasHydrated: true });
-  });
-}

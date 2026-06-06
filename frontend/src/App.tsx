@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/authStore';
 export function App() {
   const { initAuth } = useAuth();
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
+  const setHydrated = useAuthStore((state) => state.setHydrated);
   const toast = useToast();
 
   useEffect(() => {
@@ -29,6 +30,17 @@ export function App() {
   useEffect(() => {
     ensureProjectPath();
   }, []);
+
+  useEffect(() => {
+    if (useAuthStore.persist.hasHydrated()) {
+      setHydrated();
+      return;
+    }
+
+    return useAuthStore.persist.onFinishHydration(() => {
+      setHydrated();
+    });
+  }, [setHydrated]);
 
   useEffect(() => {
     if (hasHydrated) {
