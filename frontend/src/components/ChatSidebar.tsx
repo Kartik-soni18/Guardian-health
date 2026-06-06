@@ -91,7 +91,7 @@ export function ChatSidebar({
         )}
       >
         {/* Header — height matches chat panel header */}
-        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-4 dark:border-gray-800">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200 px-4 sm:px-6 lg:px-8 dark:border-gray-800">
           {!collapsed && (
             <>
               <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
@@ -174,7 +174,7 @@ export function ChatSidebar({
                     >
                       <button
                         onClick={() => handleSelectChat(chat.id)}
-                        className="flex w-full items-start gap-3 px-3 py-2.5 text-left"
+                        className="flex w-full items-start gap-3 px-4 py-2.5 text-left sm:px-6 lg:px-8"
                       >
                         <MessageSquare
                           className={cn(
@@ -267,7 +267,7 @@ export function ChatSidebar({
 
         {/* Footer — padding matches chat input bar */}
         {!collapsed && (
-          <div className="shrink-0 border-t border-gray-200/80 px-4 py-4 dark:border-gray-800">
+          <div className="shrink-0 border-t border-gray-200/80 px-4 py-4 sm:px-6 lg:px-8 dark:border-gray-800">
             <button
               onClick={handleNewChat}
               className="flex w-full items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-sm text-gray-500 transition-colors hover:border-primary-400 hover:text-primary-600 dark:border-gray-700 dark:text-gray-500 dark:hover:border-primary-600 dark:hover:text-primary-400"
