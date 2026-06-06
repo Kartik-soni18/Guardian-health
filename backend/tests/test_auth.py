@@ -234,6 +234,125 @@ class TestMe:
 
 
 # =============================================================================
+# Google Sign-In Tests
+# =============================================================================
+
+class TestGoogleLogin:
+    """POST /api/v1/auth/google — Rate limit: 10/min"""
+
+    async def test_google_login_success(self, test_app: AsyncClient, monkeypatch) -> None:
+        """Valid Google ID token returns token pair and creates user."""
+        def _fake_verify(token, request, audience):
+            assert audience == "test-client-id.apps.googleusercontent.com"
+            return {
+                "iss": "accounts.google.com",
+                "sub": "google-user-123",
+                "email": "newgoogle@example.com",
+                "email_verified": True,
+            }
+
+        monkeypatch.setattr(
+            "app.services.auth_service.google_id_token.verify_oauth2_token",
+            _fake_verify,
+        )
+
+        resp = await test_app.post("/api/v1/auth/google", json={
+            "id_token": "valid.google.token",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "access_token" in data
+        assert "refresh_token" in data
+        assert data["user"]["username"]
+
+    async def test_google_login_invalid_token(self, test_app: AsyncClient, monkeypatch) -> None:
+        """Invalid Google token returns 401."""
+        def _fake_verify(token, request, audience):
+            raise ValueError("bad token")
+
+        monkeypatch.setattr(
+            "app.services.auth_service.google_id_token.verify_oauth2_token",
+            _fake_verify,
+        )
+
+        resp = await test_app.post("/api/v1/auth/google", json={
+            "id_token": "invalid.token",
+        })
+        assert resp.status_code == 401
+
+    async def test_google_login_unverified_email(self, test_app: AsyncClient, monkeypatch) -> None:
+        """Unverified Google email returns 401."""
+        def _fake_verify(token, request, audience):
+            return {
+                "iss": "accounts.google.com",
+                "sub": "google-user-456",
+                "email": "unverified@example.com",
+                "email_verified": False,
+            }
+
+        monkeypatch.setattr(
+            "app.services.auth_service.google_id_token.verify_oauth2_token",
+            _fake_verify,
+        )
+
+        resp = await test_app.post("/api/v1/auth/google", json={
+            "id_token": "valid.google.token",
+        })
+        assert resp.status_code == 401
+
+    async def test_google_login_not_configured(
+        self,
+        test_app: AsyncClient,
+        test_settings,
+        monkeypatch,
+    ) -> None:
+        """Missing CLIENT_ID_GOOGLE returns 503."""
+        monkeypatch.setattr(test_settings, "client_id_google", None)
+
+        resp = await test_app.post("/api/v1/auth/google", json={
+            "id_token": "any.token",
+        })
+        assert resp.status_code == 503
+
+    async def test_google_login_links_existing_email(
+        self,
+        test_app: AsyncClient,
+        test_db,
+        monkeypatch,
+    ) -> None:
+        """Existing local user with same email gets Google account linked."""
+        await test_db.create_user({
+            "username": "localuser",
+            "password_hash": get_password_hash("TestPass123!"),
+            "email": "shared@example.com",
+            "auth_provider": "local",
+        })
+
+        def _fake_verify(token, request, audience):
+            return {
+                "iss": "accounts.google.com",
+                "sub": "google-user-789",
+                "email": "shared@example.com",
+                "email_verified": True,
+            }
+
+        monkeypatch.setattr(
+            "app.services.auth_service.google_id_token.verify_oauth2_token",
+            _fake_verify,
+        )
+
+        resp = await test_app.post("/api/v1/auth/google", json={
+            "id_token": "valid.google.token",
+        })
+        assert resp.status_code == 200
+        assert resp.json()["user"]["username"] == "localuser"
+
+        linked = await test_db.get_user_by_username("localuser")
+        assert linked is not None
+        assert linked.get("google_id") == "google-user-789"
+
+
+# =============================================================================
 # Rate Limiting Tests
 # =============================================================================
 

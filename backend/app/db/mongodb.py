@@ -45,6 +45,7 @@ def _normalize_user_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
     doc.setdefault("is_active", True)
     doc.setdefault("is_verified", False)
     doc.setdefault("role", "patient")
+    doc.setdefault("auth_provider", "local")
     hashed = doc.get("hashed_password", doc.get("password_hash", ""))
     doc["hashed_password"] = hashed
     doc["password_hash"] = hashed
@@ -61,8 +62,10 @@ async def connect_mongodb() -> None:
     await _db.command("ping")
     try:
         await _db.users.create_index("username", unique=True)
+        await _db.users.create_index("google_id", unique=True, sparse=True)
+        await _db.users.create_index("email", unique=True, sparse=True)
     except Exception as exc:
-        logger.warning("Could not ensure username index: %s", exc)
+        logger.warning("Could not ensure user indexes: %s", exc)
     try:
         await _db.users.drop_index("email_1")
         logger.info("Dropped legacy email index from users collection")
@@ -136,6 +139,29 @@ class MongoDBManager:
             return None
         return _normalize_user_doc(doc)
 
+    async def get_user_by_google_id(self, google_id: str) -> Optional[Dict[str, Any]]:
+        if self._sync_db is not None:
+            doc = await asyncio.to_thread(
+                self._sync_db.users.find_one, {"google_id": google_id}
+            )
+        else:
+            doc = await self.db.users.find_one({"google_id": google_id})
+        if doc is None:
+            return None
+        return _normalize_user_doc(doc)
+
+    async def get_user_by_email(self, email: str) -> Optional[Dict[str, Any]]:
+        normalized = email.strip().lower()
+        if self._sync_db is not None:
+            doc = await asyncio.to_thread(
+                self._sync_db.users.find_one, {"email": normalized}
+            )
+        else:
+            doc = await self.db.users.find_one({"email": normalized})
+        if doc is None:
+            return None
+        return _normalize_user_doc(doc)
+
     async def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         username = user_data["username"]
         now = datetime.now(timezone.utc)
@@ -146,10 +172,58 @@ class MongoDBManager:
             ),
             "created_at": now,
         }
+        for key in (
+            "google_id",
+            "email",
+            "auth_provider",
+            "is_verified",
+            "is_active",
+            "role",
+        ):
+            if key in user_data:
+                doc[key] = user_data[key]
         if self._sync_db is not None:
             await asyncio.to_thread(self._sync_db.users.insert_one, doc)
         else:
             await self.db.users.insert_one(doc)
+        return _normalize_user_doc(doc)
+
+    async def create_oauth_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        payload = {
+            **user_data,
+            "password_hash": "",
+            "auth_provider": user_data.get("auth_provider", "google"),
+            "is_verified": user_data.get("is_verified", True),
+        }
+        if "email" in payload and payload["email"]:
+            payload["email"] = payload["email"].strip().lower()
+        return await self.create_user(payload)
+
+    async def link_google_account(
+        self,
+        username: str,
+        google_id: str,
+        email: str,
+    ) -> Optional[Dict[str, Any]]:
+        normalized_email = email.strip().lower()
+        update: Dict[str, Any] = {"google_id": google_id, "email": normalized_email}
+        query = {"username": username}
+        if self._sync_db is not None:
+            result = await asyncio.to_thread(
+                self._sync_db.users.update_one,
+                query,
+                {"$set": update},
+            )
+            if result.matched_count == 0:
+                return None
+            doc = await asyncio.to_thread(self._sync_db.users.find_one, query)
+        else:
+            result = await self.db.users.update_one(query, {"$set": update})
+            if result.matched_count == 0:
+                return None
+            doc = await self.db.users.find_one(query)
+        if doc is None:
+            return None
         return _normalize_user_doc(doc)
 
     async def create_chat(self, user_id: str, title: str) -> Dict[str, Any]:

@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     api_gateway_stage: str = "prod"
     mock_mode: bool = False
 
+    client_id_google: Optional[str] = Field(default=None, alias="CLIENT_ID_GOOGLE")
+
     rate_limit_health: str = "100/minute"
     rate_limit_register: str = "5/minute"
     rate_limit_login: str = "10/minute"

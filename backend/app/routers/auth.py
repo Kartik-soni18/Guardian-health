@@ -51,6 +51,10 @@ class _LoginBody(BaseModel):
     password: str = Field(..., min_length=1)
 
 
+class _GoogleAuthBody(BaseModel):
+    id_token: str = Field(..., min_length=1)
+
+
 @router.post("/login", response_model=TokenResponse)
 @limiter.limit(get_settings().rate_limit_login)
 async def login(
@@ -69,6 +73,30 @@ async def login(
         )
 
     assert user is not None
+    return _token_response(access, refresh, user_doc_to_response(user))
+
+
+@router.post("/google", response_model=TokenResponse)
+@limiter.limit(get_settings().rate_limit_login)
+async def google_login(
+    request: Request,
+    body: _GoogleAuthBody = Body(...),
+    auth_svc: AuthService = Depends(_auth_service),
+) -> TokenResponse:
+    if not get_settings().client_id_google:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google sign-in is not configured",
+        )
+    try:
+        access, refresh, user = await auth_svc.login_with_google(body.id_token)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(exc),
+            headers={"WWW-Authenticate": "Bearer"},
+        ) from exc
+
     return _token_response(access, refresh, user_doc_to_response(user))
 
 

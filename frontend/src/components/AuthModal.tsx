@@ -1,8 +1,11 @@
 import { useState, useEffect, FormEvent } from 'react';
+import { GoogleLogin } from '@react-oauth/google';
 import { X, Eye, EyeOff, Loader2, Shield, Lock, User, Wand2, Copy, Check } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 import { generateSecurePassword } from '@/lib/password';
+
+const googleClientId = import.meta.env.VITE_CLIENT_ID_GOOGLE ?? '';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -31,7 +34,17 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
     password: '',
   });
 
-  const { login, register, isLoginLoading, isRegisterLoading, loginError, registerError } = useAuth();
+  const {
+    login,
+    register,
+    loginWithGoogle,
+    isLoginLoading,
+    isRegisterLoading,
+    isGoogleLoginLoading,
+    loginError,
+    registerError,
+    googleLoginError,
+  } = useAuth();
 
   useEffect(() => {
     setTab(defaultTab);
@@ -46,7 +59,11 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
       const message = (registerError as Error).message || 'Registration failed';
       setErrors((prev) => ({ ...prev, general: message }));
     }
-  }, [loginError, registerError]);
+    if (googleLoginError) {
+      const message = (googleLoginError as Error).message || 'Google sign-in failed';
+      setErrors((prev) => ({ ...prev, general: message }));
+    }
+  }, [loginError, registerError, googleLoginError]);
 
   useEffect(() => {
     if (isOpen) {
@@ -140,7 +157,22 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
 
   if (!isOpen) return null;
 
-  const isLoading = isLoginLoading || isRegisterLoading;
+  const isLoading = isLoginLoading || isRegisterLoading || isGoogleLoginLoading;
+
+  const handleGoogleSuccess = async (credential?: string) => {
+    if (!credential) {
+      setErrors((prev) => ({ ...prev, general: 'Google sign-in failed' }));
+      return;
+    }
+
+    setErrors((prev) => ({ ...prev, general: undefined }));
+    try {
+      await loginWithGoogle(credential);
+      onClose();
+    } catch {
+      // Errors are handled via googleLoginError effect
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -200,6 +232,34 @@ export function AuthModal({ isOpen, onClose, defaultTab = 'login' }: AuthModalPr
           {errors.general && (
             <div className="mb-4 rounded-lg bg-red-50 p-3 text-sm text-red-700 dark:bg-red-950/30 dark:text-red-400">
               {errors.general}
+            </div>
+          )}
+
+          {googleClientId && (
+            <div className="mb-6">
+              <div className="flex justify-center">
+                <GoogleLogin
+                  onSuccess={(response) => handleGoogleSuccess(response.credential)}
+                  onError={() =>
+                    setErrors((prev) => ({ ...prev, general: 'Google sign-in failed' }))
+                  }
+                  theme="outline"
+                  size="large"
+                  text={tab === 'login' ? 'signin_with' : 'signup_with'}
+                  shape="rectangular"
+                  width={360}
+                />
+              </div>
+              <div className="relative my-5">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-gray-200 dark:border-gray-700" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white px-2 text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                    or continue with email
+                  </span>
+                </div>
+              </div>
             </div>
           )}
 

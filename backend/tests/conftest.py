@@ -10,6 +10,10 @@ os.environ.setdefault(
     "test-secret-key-with-at-least-32-characters-long",
 )
 os.environ.setdefault("MOCK_MODE", "true")
+os.environ.setdefault(
+    "CLIENT_ID_GOOGLE",
+    "test-client-id.apps.googleusercontent.com",
+)
 
 import mongomock
 import pytest

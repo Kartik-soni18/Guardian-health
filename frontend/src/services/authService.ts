@@ -52,6 +52,17 @@ export const authService = {
     }
   },
 
+  async loginWithGoogle(idToken: string): Promise<TokenResponse & { user: User }> {
+    try {
+      const response = await api.post<BackendTokenResponse>('/auth/google', {
+        id_token: idToken,
+      });
+      return mapTokenResponse(response.data);
+    } catch (error) {
+      throw wrapAuthError(error, 'Google sign-in failed');
+    }
+  },
+
   async register(data: RegisterData): Promise<TokenResponse & { user: User }> {
     try {
       const response = await api.post<BackendTokenResponse>('/auth/register', {

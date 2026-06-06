@@ -14,7 +14,7 @@ class User(BaseModel):
     """Complete user record as stored in MongoDB."""
 
     username: str
-    hashed_password: str
+    hashed_password: str = ""
     is_active: bool = True
     is_verified: bool = False
     role: UserRole = UserRole.PATIENT

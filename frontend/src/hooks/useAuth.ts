@@ -57,6 +57,18 @@ export function useAuth() {
     },
   });
 
+  const googleLoginMutation = useMutation({
+    mutationFn: async (idToken: string) => {
+      const response = await authService.loginWithGoogle(idToken);
+      return response;
+    },
+    onSuccess: (data) => {
+      login(data.accessToken, data.refreshToken);
+      setUser(data.user);
+      queryClient.invalidateQueries({ queryKey: ['chats'] });
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: async () => {
       await authService.logout();
@@ -106,11 +118,14 @@ export function useAuth() {
     isLoading: isBootstrapping,
     login: loginMutation.mutateAsync,
     register: registerMutation.mutateAsync,
+    loginWithGoogle: googleLoginMutation.mutateAsync,
     logout: logoutMutation.mutate,
     isLoginLoading: loginMutation.isPending,
     isRegisterLoading: registerMutation.isPending,
+    isGoogleLoginLoading: googleLoginMutation.isPending,
     loginError: loginMutation.error,
     registerError: registerMutation.error,
+    googleLoginError: googleLoginMutation.error,
     initAuth,
   };
 }

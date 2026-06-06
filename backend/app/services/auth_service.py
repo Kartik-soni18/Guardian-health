@@ -1,7 +1,13 @@
 """Authentication service backed by MongoDB."""
 
+import re
+import secrets
 from typing import Any, Dict, Optional, Tuple
 
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
+
+from app.config import get_settings
 from app.core.security import (
     create_token_pair,
     decode_token,
@@ -10,6 +16,8 @@ from app.core.security import (
 )
 from app.db.mongodb import MongoDBManager
 from app.schemas.user import UserCreate
+
+_GOOGLE_ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
 
 
 class AuthService:
@@ -24,6 +32,7 @@ class AuthService:
         user_data = {
             "username": user_create.username,
             "password_hash": get_password_hash(user_create.password),
+            "auth_provider": "local",
         }
         return await self.db.create_user(user_data)
 
@@ -31,7 +40,10 @@ class AuthService:
         user = await self.db.get_user_by_username(username)
         if user is None:
             return None
-        if not verify_password(password, user.get("hashed_password", user.get("password_hash", ""))):
+        password_hash = user.get("hashed_password", user.get("password_hash", ""))
+        if not password_hash:
+            return None
+        if not verify_password(password, password_hash):
             return None
         if not user.get("is_active", True):
             return None
@@ -45,6 +57,60 @@ class AuthService:
             user["username"],
             extra_claims={"uid": user.get("id", user["username"])},
         )
+
+    async def login_with_google(self, id_token: str) -> Tuple[str, str, Dict[str, Any]]:
+        settings = get_settings()
+        if not settings.client_id_google:
+            raise ValueError("Google sign-in is not configured")
+
+        try:
+            payload = google_id_token.verify_oauth2_token(
+                id_token,
+                google_requests.Request(),
+                settings.client_id_google,
+            )
+        except ValueError as exc:
+            raise ValueError("Invalid Google token") from exc
+
+        if payload.get("iss") not in _GOOGLE_ISSUERS:
+            raise ValueError("Invalid Google token issuer")
+
+        google_sub = payload.get("sub")
+        email = payload.get("email")
+        email_verified = payload.get("email_verified", False)
+
+        if not google_sub:
+            raise ValueError("Invalid Google token payload")
+        if not email or not email_verified:
+            raise ValueError("Google account email is not verified")
+
+        user = await self.db.get_user_by_google_id(google_sub)
+        if user is None:
+            user = await self.db.get_user_by_email(email)
+
+        if user is None:
+            username = await self._derive_username_from_email(email)
+            user = await self.db.create_oauth_user({
+                "username": username,
+                "google_id": google_sub,
+                "email": email,
+                "auth_provider": "google",
+                "is_verified": True,
+            })
+        elif not user.get("google_id"):
+            linked = await self.db.link_google_account(user["username"], google_sub, email)
+            if linked is None:
+                raise ValueError("Unable to link Google account")
+            user = linked
+
+        if not user.get("is_active", True):
+            raise ValueError("Account disabled")
+
+        access, refresh = create_token_pair(
+            user["username"],
+            extra_claims={"uid": user.get("id", user["username"])},
+        )
+        return access, refresh, user
 
     async def refresh_access_token(self, refresh_token: str) -> str:
         payload = decode_token(refresh_token)
@@ -66,3 +132,18 @@ class AuthService:
 
     async def get_user(self, username: str) -> Optional[Dict[str, Any]]:
         return await self.db.get_user_by_username(username)
+
+    async def _derive_username_from_email(self, email: str) -> str:
+        local_part = email.split("@", 1)[0].lower()
+        cleaned = re.sub(r"[^a-z0-9_]", "_", local_part).strip("_")
+        if len(cleaned) < 3:
+            cleaned = f"user_{cleaned or secrets.token_hex(3)}"
+        base = cleaned[:40]
+
+        candidate = base
+        suffix = 0
+        while await self.db.get_user_by_username(candidate) is not None:
+            suffix += 1
+            candidate = f"{base}_{suffix}"[:50]
+
+        return candidate
