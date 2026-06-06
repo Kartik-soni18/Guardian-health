@@ -43,13 +43,11 @@ Interactive docs are available at `/docs` when `DEBUG=true`.
 ```json
 {
   "query": "I have had fever and joint pain for 3 days",
-  "chat_id": "optional-session-id",
-  "conversation_history": [
-    {"role": "user", "content": "..."},
-    {"role": "assistant", "content": "..."}
-  ]
+  "chat_id": "optional-session-id"
 }
 ```
+
+When the request is **authenticated** and includes `chat_id`, the server loads conversation history from MongoDB and **ignores** any client-sent `conversation_history`. Without `chat_id`, triage runs as a single-turn request.
 
 ### Triage response
 
@@ -66,6 +64,29 @@ Interactive docs are available at `/docs` when `DEBUG=true`.
 }
 ```
 
+## Chats
+
+All chat endpoints require authentication.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/chats` | List current user's chats |
+| `POST` | `/api/v1/chats` | Create a new chat |
+| `GET` | `/api/v1/chats/{chat_id}` | Get chat with messages |
+| `DELETE` | `/api/v1/chats/{chat_id}` | Delete chat and its messages |
+
+### Create chat body
+
+```json
+{
+  "initialMessage": "I have a fever"
+}
+```
+
+`initialMessage` is optional and sets the chat title.
+
+Messages are persisted automatically when triage runs with a `chat_id`. User message content is PII-scrubbed before storage.
+
 ## Rate Limits
 
 | Endpoint group | Limit |
@@ -75,3 +96,4 @@ Interactive docs are available at `/docs` when `DEBUG=true`.
 | Login | 10/minute |
 | Refresh | 20/minute |
 | Triage | 10/minute |
+| Chats | 30/minute |

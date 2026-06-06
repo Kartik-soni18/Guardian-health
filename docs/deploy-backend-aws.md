@@ -43,7 +43,24 @@ export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output tex
 
 ## Step 3 — Build and deploy with SAM
 
-SAM builds the container image and pushes to an ECR repo it manages. From the **project root**:
+Use the deploy script (recommended) from the **project root**:
+
+```bash
+./scripts/deploy-aws.sh
+```
+
+This loads secrets from `.env`, cleans local `.aws-sam/` artifacts and old ECR images, runs `sam build` + `sam deploy`, and verifies `/health`.
+
+Options:
+
+```bash
+./scripts/deploy-aws.sh --clean-only          # cleanup only, no deploy
+./scripts/deploy-aws.sh --skip-ecr            # skip ECR image cleanup
+./scripts/deploy-aws.sh --trigger-frontend    # also run GitHub Pages workflow via gh
+AWS_REGION=ap-southeast-2 ./scripts/deploy-aws.sh
+```
+
+Manual deploy (equivalent):
 
 Load values from your root `.env` (do not commit secrets):
 
@@ -56,10 +73,11 @@ export ALLOWED_ORIGINS="https://kartik-soni18.github.io"
 sam build --template-file template.yaml
 
 sam deploy \
-  --template-file template.yaml \
+  --template-file .aws-sam/build/template.yaml \
   --stack-name guardian-health \
   --region $AWS_REGION \
   --capabilities CAPABILITY_IAM \
+  --resolve-s3 \
   --resolve-image-repos \
   --parameter-overrides \
     SecretKey="$SECRET_KEY" \
@@ -123,6 +141,12 @@ curl -s -D - -o /dev/null -X OPTIONS \
 Then open [https://kartik-soni18.github.io/Guardian-health/](https://kartik-soni18.github.io/Guardian-health/) and test login + triage.
 
 ## Updating after code changes
+
+```bash
+./scripts/deploy-aws.sh
+```
+
+Or manually:
 
 ```bash
 sam build --template-file template.yaml

@@ -7,15 +7,21 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
-from app.core.dependencies import get_current_user_optional, limiter
+from app.core.dependencies import get_current_user_optional, get_mongodb_manager, limiter
+from app.db.mongodb import MongoDBManager
 from app.graph.streaming import format_sse_event
 from app.schemas.triage import TriageRequest, TriageResponse
 from app.schemas.user import UserResponse
+from app.services.chat_service import ChatService
 from app.services.triage_service import TriageService
 
 logger = logging.getLogger("guardian.routers.triage")
 
 router = APIRouter(prefix="/api/v1/triage", tags=["triage"])
+
+
+def _triage_service(db: MongoDBManager = Depends(get_mongodb_manager)) -> TriageService:
+    return TriageService(ChatService(db))
 
 
 @router.post("", response_model=TriageResponse)
@@ -24,7 +30,7 @@ async def triage(
     request: Request,
     triage_req: TriageRequest,
     current_user: Optional[UserResponse] = Depends(get_current_user_optional),
-    triage_svc: TriageService = Depends(TriageService),
+    triage_svc: TriageService = Depends(_triage_service),
 ) -> TriageResponse:
     user_id = current_user.id if current_user else None
     return await triage_svc.invoke_graph(triage_req, user_id=user_id)
@@ -36,7 +42,7 @@ async def triage_stream(
     request: Request,
     triage_req: TriageRequest,
     current_user: Optional[UserResponse] = Depends(get_current_user_optional),
-    triage_svc: TriageService = Depends(TriageService),
+    triage_svc: TriageService = Depends(_triage_service),
 ) -> StreamingResponse:
     user_id = current_user.id if current_user else None
 

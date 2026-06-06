@@ -1,8 +1,9 @@
-"""MongoDB connection and user persistence."""
+"""MongoDB connection and user/chat persistence."""
 
 import asyncio
+import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 
@@ -21,6 +22,19 @@ def _normalize_created_at(value: Any) -> str:
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return str(value)
+
+
+def _normalize_chat_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
+    doc["id"] = str(doc.pop("_id"))
+    doc["created_at"] = _normalize_created_at(doc.get("created_at"))
+    doc["updated_at"] = _normalize_created_at(doc.get("updated_at"))
+    return doc
+
+
+def _normalize_message_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
+    doc["id"] = str(doc.pop("_id"))
+    doc["created_at"] = _normalize_created_at(doc.get("created_at"))
+    return doc
 
 
 def _normalize_user_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -54,6 +68,12 @@ async def connect_mongodb() -> None:
         logger.info("Dropped legacy email index from users collection")
     except Exception:
         pass
+    try:
+        await _db.chats.create_index([("user_id", 1), ("updated_at", -1)])
+        await _db.chats.create_index([("_id", 1), ("user_id", 1)])
+        await _db.messages.create_index([("chat_id", 1), ("created_at", 1)])
+    except Exception as exc:
+        logger.warning("Could not ensure chat/message indexes: %s", exc)
     logger.info("Connected to MongoDB database=%s", settings.mongodb_db_name)
 
 
@@ -89,7 +109,7 @@ async def ping_mongodb() -> bool:
 
 
 class MongoDBManager:
-    """Async MongoDB manager for user CRUD."""
+    """Async MongoDB manager for user and chat CRUD."""
 
     def __init__(
         self,
@@ -131,3 +151,128 @@ class MongoDBManager:
         else:
             await self.db.users.insert_one(doc)
         return _normalize_user_doc(doc)
+
+    async def create_chat(self, user_id: str, title: str) -> Dict[str, Any]:
+        now = datetime.now(timezone.utc)
+        chat_id = str(uuid.uuid4())
+        doc = {
+            "_id": chat_id,
+            "user_id": user_id,
+            "title": title,
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+        }
+        if self._sync_db is not None:
+            await asyncio.to_thread(self._sync_db.chats.insert_one, doc)
+        else:
+            await self.db.chats.insert_one(doc)
+        return _normalize_chat_doc(doc)
+
+    async def list_chats(self, user_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        query = {"user_id": user_id}
+        if self._sync_db is not None:
+            cursor = self._sync_db.chats.find(query).sort("updated_at", -1).limit(limit)
+            docs = await asyncio.to_thread(list, cursor)
+        else:
+            cursor = self.db.chats.find(query).sort("updated_at", -1).limit(limit)
+            docs = await cursor.to_list(length=limit)
+        return [_normalize_chat_doc(doc) for doc in docs]
+
+    async def get_chat(self, chat_id: str, user_id: str) -> Optional[Dict[str, Any]]:
+        query = {"_id": chat_id, "user_id": user_id}
+        if self._sync_db is not None:
+            doc = await asyncio.to_thread(self._sync_db.chats.find_one, query)
+        else:
+            doc = await self.db.chats.find_one(query)
+        if doc is None:
+            return None
+        return _normalize_chat_doc(doc)
+
+    async def delete_chat(self, chat_id: str, user_id: str) -> bool:
+        query = {"_id": chat_id, "user_id": user_id}
+        if self._sync_db is not None:
+            result = await asyncio.to_thread(self._sync_db.chats.delete_one, query)
+            if result.deleted_count:
+                await asyncio.to_thread(
+                    self._sync_db.messages.delete_many, {"chat_id": chat_id}
+                )
+                return True
+            return False
+        result = await self.db.chats.delete_one(query)
+        if result.deleted_count:
+            await self.db.messages.delete_many({"chat_id": chat_id})
+            return True
+        return False
+
+    async def list_messages(
+        self,
+        chat_id: str,
+        user_id: str,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        chat = await self.get_chat(chat_id, user_id)
+        if chat is None:
+            return []
+        query = {"chat_id": chat_id}
+        if self._sync_db is not None:
+            cursor = (
+                self._sync_db.messages.find(query).sort("created_at", 1).limit(limit)
+            )
+            docs = await asyncio.to_thread(list, cursor)
+        else:
+            cursor = self.db.messages.find(query).sort("created_at", 1).limit(limit)
+            docs = await cursor.to_list(length=limit)
+        return [_normalize_message_doc(doc) for doc in docs]
+
+    async def append_messages(
+        self,
+        chat_id: str,
+        user_id: str,
+        messages: List[Dict[str, Any]],
+    ) -> None:
+        if not messages:
+            return
+        chat = await self.get_chat(chat_id, user_id)
+        if chat is None:
+            raise ValueError("Chat not found or access denied")
+
+        now = datetime.now(timezone.utc)
+        docs = []
+        for msg in messages:
+            docs.append({
+                "_id": msg.get("id") or str(uuid.uuid4()),
+                "chat_id": chat_id,
+                "user_id": user_id,
+                "role": msg["role"],
+                "content": msg["content"],
+                "triage": msg.get("triage"),
+                "created_at": msg.get("created_at") or now,
+            })
+
+        if self._sync_db is not None:
+            await asyncio.to_thread(self._sync_db.messages.insert_many, docs)
+            await asyncio.to_thread(
+                self._sync_db.chats.update_one,
+                {"_id": chat_id, "user_id": user_id},
+                {"$set": {"updated_at": now}},
+            )
+        else:
+            await self.db.messages.insert_many(docs)
+            await self.db.chats.update_one(
+                {"_id": chat_id, "user_id": user_id},
+                {"$set": {"updated_at": now}},
+            )
+
+    async def update_chat_title(self, chat_id: str, user_id: str, title: str) -> None:
+        if self._sync_db is not None:
+            await asyncio.to_thread(
+                self._sync_db.chats.update_one,
+                {"_id": chat_id, "user_id": user_id},
+                {"$set": {"title": title, "updated_at": datetime.now(timezone.utc)}},
+            )
+        else:
+            await self.db.chats.update_one(
+                {"_id": chat_id, "user_id": user_id},
+                {"$set": {"title": title, "updated_at": datetime.now(timezone.utc)}},
+            )

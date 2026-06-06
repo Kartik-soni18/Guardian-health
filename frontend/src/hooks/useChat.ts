@@ -1,16 +1,13 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { chatService } from '@/services/chatService';
 import { triageService } from '@/services/triageService';
 import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/stores/authStore';
 import { Chat, ChatMessage, TriageRequest } from '@/types';
 
-function buildChatTitle(content: string): string {
-  const trimmed = content.trim();
-  return trimmed.length > 48 ? `${trimmed.slice(0, 48)}…` : trimmed || 'New chat';
-}
-
 export function useChat() {
   const userId = useAuthStore((s) => s.user?.id);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const {
     chats,
     currentChatId,
@@ -22,10 +19,12 @@ export function useChat() {
     error,
     addChat,
     removeChat,
+    setChats,
     setCurrentChat,
     setMessages,
     addMessage,
     statusMessage,
+    setIsLoading,
     setIsStreaming,
     setStreamingContent,
     setStreamingTriage,
@@ -35,13 +34,57 @@ export function useChat() {
     clearStreaming,
   } = useChatStore();
 
+  const [isDeletingChat, setIsDeletingChat] = useState(false);
+
+  const refreshChats = useCallback(async () => {
+    if (!isAuthenticated) {
+      setChats([]);
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const loaded = await chatService.listChats();
+      setChats(loaded);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load chats');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, setChats, setError, setIsLoading]);
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      void refreshChats();
+    } else {
+      setChats([]);
+      setCurrentChat(null);
+      setMessages([]);
+    }
+  }, [isAuthenticated, refreshChats, setChats, setCurrentChat, setMessages]);
+
   const loadChat = useCallback(
     async (chatId: string) => {
-      const chat = chats.find((item) => item.id === chatId);
       setCurrentChat(chatId);
-      setMessages(chat?.messages || []);
+      setIsLoading(true);
+      setError(null);
+      try {
+        const chat = await chatService.getChat(chatId);
+        setMessages(chat.messages);
+        setChats(
+          useChatStore.getState().chats.map((item) =>
+            item.id === chatId
+              ? { ...item, title: chat.title, updatedAt: chat.updatedAt, messages: chat.messages }
+              : item
+          )
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load chat');
+        setMessages([]);
+      } finally {
+        setIsLoading(false);
+      }
     },
-    [chats, setCurrentChat, setMessages]
+    [setChats, setCurrentChat, setError, setIsLoading, setMessages]
   );
 
   const sendMessage = useCallback(
@@ -60,12 +103,14 @@ export function useChat() {
       setStreamingContent('');
       setStreamingTriage(null);
       setStatusMessage('');
+      setError(null);
 
-      const history = [...messages, userMessage];
       const request = { query: content, symptoms: content } as TriageRequest;
-      const options = { chatId, history };
+      const options = { chatId };
 
-      const addAssistantMessage = (triage: Awaited<ReturnType<typeof triageService.submitTriage>>) => {
+      const addAssistantMessage = (
+        triage: Awaited<ReturnType<typeof triageService.submitTriage>>
+      ) => {
         const assistantMessage: ChatMessage = {
           id: crypto.randomUUID(),
           chatId,
@@ -93,10 +138,12 @@ export function useChat() {
         }
 
         addAssistantMessage(triage);
+        await refreshChats();
       } catch (err) {
         try {
           const triage = await triageService.submitTriage(request, options);
           addAssistantMessage(triage);
+          await refreshChats();
         } catch (fallbackErr) {
           setError(
             fallbackErr instanceof Error
@@ -114,7 +161,7 @@ export function useChat() {
       addMessage,
       clearStreaming,
       mergeStreamingTriage,
-      messages,
+      refreshChats,
       setError,
       setIsStreaming,
       setStatusMessage,
@@ -125,25 +172,32 @@ export function useChat() {
 
   const createNewChat = useCallback(
     async (initialMessage?: string): Promise<Chat | null> => {
-      const chat: Chat = {
-        id: crypto.randomUUID(),
-        title: buildChatTitle(initialMessage || 'New chat'),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        userId: userId || 'anonymous',
-        messages: [],
-      };
-      addChat(chat);
-      return chat;
+      try {
+        const chat = await chatService.createChat(initialMessage);
+        addChat({ ...chat, userId: userId || chat.userId, messages: [] });
+        return chat;
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to create chat');
+        return null;
+      }
     },
-    [addChat, userId]
+    [addChat, setError, userId]
   );
 
   const deleteChat = useCallback(
-    (chatId: string) => {
-      removeChat(chatId);
+    async (chatId: string) => {
+      setIsDeletingChat(true);
+      try {
+        await chatService.deleteChat(chatId);
+        removeChat(chatId);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to delete chat');
+        throw err;
+      } finally {
+        setIsDeletingChat(false);
+      }
     },
-    [removeChat]
+    [removeChat, setError]
   );
 
   return {
@@ -160,7 +214,8 @@ export function useChat() {
     sendMessage,
     createNewChat,
     deleteChat,
-    isDeletingChat: false,
+    isDeletingChat,
     setCurrentChat,
+    refreshChats,
   };
-}
+};

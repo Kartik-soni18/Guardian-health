@@ -11,7 +11,7 @@ Lambda Function URL (RESPONSE_STREAM)
         ▼
 Lambda container (uvicorn + Lambda Web Adapter)
         │
-        ├── MongoDB Atlas (users, auth)
+        ├── MongoDB Atlas (users, chats, messages)
         ├── Upstash Redis (cache, rate limits)
         ├── Together.ai (LLM triage)
         └── Indian Symptom-Disease Dataset (local CSV)
@@ -27,6 +27,14 @@ Lambda container (uvicorn + Lambda Web Adapter)
 6. **Reasoning** — builds clinical scratchpad with dataset hints
 7. **Routing** — triage, consultation, disease info, or emergency path
 8. **Compliance** — safety review before response assembly
+9. **Persist** — when authenticated with `chat_id`, user and assistant turns are saved to MongoDB (server-authoritative history)
+
+## Chat Persistence
+
+- Chats and messages live in separate MongoDB collections keyed by `user_id`.
+- The frontend creates chats via `/api/v1/chats` and sends triage requests with `chat_id`.
+- The backend loads prior messages from MongoDB for multi-turn context; client-sent `conversation_history` is ignored for authenticated chat sessions.
+- User messages are PII-scrubbed before persistence.
 
 ## Streaming
 
@@ -45,7 +53,7 @@ Lambda Web Adapter runs uvicorn with `AWS_LWA_INVOKE_MODE=response_stream` so SS
 | Frontend | GitHub Pages | Static Vite build; `VITE_API_URL` and `VITE_STREAM_API_URL` point to Function URL + `/api/v1` |
 | Backend | AWS Lambda | Container image via ECR; uvicorn + Lambda Web Adapter (not Mangum) |
 | API entry | Lambda Function URL | `InvokeMode: RESPONSE_STREAM`; no API Gateway |
-| Auth DB | MongoDB Atlas | Connection string via `MONGODB_URI` |
+| Auth DB | MongoDB Atlas | Users, chats, and messages via `MONGODB_URI` |
 | Cache | Upstash | REST API for Lambda compatibility |
 
 ## CORS

@@ -11,7 +11,7 @@ import logging
 
 from app.agents.firewall import firewall_gate
 from app.agents.llm_client import AsyncLLMClient
-from app.agents.privacy import scrub_pii
+from app.core.privacy import scrub_pii
 from app.graph.conversation_context import build_effective_query
 from app.graph.state import TriageState
 

@@ -36,6 +36,12 @@ SAM creates and manages the ECR repository automatically when you use `--resolve
 ### Deploy with SAM
 
 ```bash
+./scripts/deploy-aws.sh
+```
+
+Or manually:
+
+```bash
 sam build --template-file template.yaml
 sam deploy \
   --template-file template.yaml \

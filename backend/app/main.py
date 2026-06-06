@@ -11,7 +11,7 @@ from app.config import get_settings, validate_startup
 from app.core.dependencies import get_rate_limiter
 from app.core.exceptions import GuardianException
 from app.db.mongodb import close_mongodb, connect_mongodb, ensure_mongodb
-from app.routers import auth_router, health_router, triage_router
+from app.routers import auth_router, chat_router, health_router, triage_router
 
 
 @asynccontextmanager
@@ -55,6 +55,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(auth_router)
+    app.include_router(chat_router)
     app.include_router(triage_router)
     app.include_router(health_router)
 

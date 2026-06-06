@@ -58,6 +58,7 @@ class Settings(BaseSettings):
     rate_limit_login: str = "10/minute"
     rate_limit_refresh: str = "20/minute"
     rate_limit_triage: str = "10/minute"
+    rate_limit_chats: str = "30/minute"
 
     @field_validator("secret_key")
     @classmethod

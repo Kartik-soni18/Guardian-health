@@ -1,7 +1,6 @@
 import { api } from './api';
 import { useAuthStore } from '@/stores/authStore';
 import {
-  ChatMessage,
   PartialTriageResponse,
   TriageLevel,
   TriageRequest,
@@ -124,16 +123,11 @@ function buildTriagePayload(
   request: TriageRequest,
   options?: {
     chatId?: string;
-    history?: ChatMessage[];
   }
 ): BackendTriageRequest {
   return {
     query: request.query || request.symptoms,
     chat_id: options?.chatId,
-    conversation_history: options?.history?.map((msg) => ({
-      role: msg.role,
-      content: msg.content,
-    })),
   };
 }
 
@@ -194,7 +188,6 @@ export const triageService = {
     request: TriageRequest,
     options?: {
       chatId?: string;
-      history?: ChatMessage[];
     }
   ): Promise<TriageResponse> {
     const payload = buildTriagePayload(request, options);
@@ -207,7 +200,6 @@ export const triageService = {
     callbacks: StreamTriageCallbacks,
     options?: {
       chatId?: string;
-      history?: ChatMessage[];
     }
   ): Promise<TriageResponse | null> {
     const payload = buildTriagePayload(request, options);

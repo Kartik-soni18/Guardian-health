@@ -7,25 +7,32 @@ import logging
 from collections.abc import AsyncIterator
 from typing import Any, Dict, List, Optional
 
+from app.core.exceptions import NotFoundError
 from app.graph import get_triage_graph, reset_graph
 from app.graph.state import TriageState
 from app.graph.stream_context import reset_stream_emit, set_stream_emit
 from app.graph.streaming import NODE_STATUS_MESSAGES
 from app.schemas.triage import TriageRequest, TriageResponse
+from app.services.chat_service import ChatService
 
 logger = logging.getLogger("guardian.triage_service")
 
 
 class TriageService:
+    def __init__(self, chat_svc: Optional[ChatService] = None) -> None:
+        self._chat_svc = chat_svc
+
     async def invoke_graph(
         self,
         request: TriageRequest,
         user_id: Optional[str] = None,
     ) -> TriageResponse:
         graph = get_triage_graph()
-        state = self._initial_state(request, user_id)
+        state = await self._resolve_state(request, user_id)
         final: Dict[str, Any] = await graph.ainvoke(state)
-        return self._build_response(final)
+        response = self._build_response(final)
+        await self._persist_turn(request, user_id, response)
+        return response
 
     async def stream_graph(
         self,
@@ -33,7 +40,7 @@ class TriageService:
         user_id: Optional[str] = None,
     ) -> AsyncIterator[dict[str, Any]]:
         graph = get_triage_graph()
-        state = self._initial_state(request, user_id)
+        state = await self._resolve_state(request, user_id)
         queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
 
         async def emit(event: dict[str, Any]) -> None:
@@ -54,6 +61,7 @@ class TriageService:
                         await queue.put({"type": "status", "message": message})
 
                 response = self._build_response(merged)
+                await self._persist_turn(request, user_id, response)
                 await queue.put({
                     "type": "done",
                     "triage": response.model_dump(),
@@ -82,18 +90,60 @@ class TriageService:
                 except asyncio.CancelledError:
                     pass
 
-    @staticmethod
-    def _initial_state(
+    async def _resolve_state(
+        self,
         request: TriageRequest,
         user_id: Optional[str],
     ) -> TriageState:
+        history: List[Dict[str, str]] = request.conversation_history or []
+
+        if user_id and request.chat_id and self._chat_svc:
+            if request.conversation_history:
+                logger.debug(
+                    "Ignoring client conversation_history for chat_id=%s",
+                    request.chat_id,
+                )
+            chat = await self._chat_svc.get_chat_detail(request.chat_id, user_id)
+            if chat is None:
+                raise NotFoundError("Chat not found.")
+            history = await self._chat_svc.build_conversation_history(
+                request.chat_id,
+                user_id,
+            )
+
         return {
             "user_input": request.query,
             "user_id": user_id,
             "chat_id": request.chat_id,
-            "conversation_history": request.conversation_history or [],
+            "conversation_history": history,
             "force_phrase_used": False,
         }
+
+    async def _persist_turn(
+        self,
+        request: TriageRequest,
+        user_id: Optional[str],
+        response: TriageResponse,
+    ) -> None:
+        if not user_id or not request.chat_id or not self._chat_svc:
+            return
+
+        assistant_content = response.response or response.assessment
+        try:
+            await self._chat_svc.save_turn(
+                chat_id=request.chat_id,
+                user_id=user_id,
+                user_content=request.query,
+                assistant_content=assistant_content,
+                triage_data=response.model_dump(),
+            )
+        except Exception as exc:
+            logger.error(
+                "Triage completed but persist failed chat_id=%s user_id=%s error=%s",
+                request.chat_id,
+                user_id,
+                exc,
+            )
 
     @staticmethod
     def _build_response(final: Dict[str, Any]) -> TriageResponse:
