@@ -28,32 +28,18 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Validate GitHub Actions variables
+      - name: Check optional Google Sign-In variable
         run: |
-          missing=0
-          if [ -z "${{ vars.VITE_API_URL }}" ]; then
-            echo "::error::Missing repository variable: VITE_API_URL"
-            missing=1
-          fi
-          if [ -z "${{ vars.VITE_STREAM_API_URL }}" ]; then
-            echo "::error::Missing repository variable: VITE_STREAM_API_URL"
-            missing=1
-          fi
           if [ -z "${{ vars.VITE_CLIENT_ID_GOOGLE }}" ]; then
-            echo "::error::Missing repository variable: VITE_CLIENT_ID_GOOGLE (Google Sign-In button will not appear without this)"
-            missing=1
-          fi
-          if [ "$missing" -ne 0 ]; then
-            echo ""
-            echo "Add them under: Settings → Secrets and variables → Actions → Variables"
-            exit 1
+            echo "::warning::VITE_CLIENT_ID_GOOGLE is not set — Google Sign-In button will be hidden on the live site."
+            echo "Add it under: Settings → Secrets and variables → Actions → Variables"
           fi
 
       - name: Build
         working-directory: frontend
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_STREAM_API_URL: ${{ vars.VITE_STREAM_API_URL }}
+          VITE_API_URL: https://454w44vn3hi5r3g6wnpx3dzfpq0xljkz.lambda-url.ap-southeast-2.on.aws/api/v1
+          VITE_STREAM_API_URL: https://454w44vn3hi5r3g6wnpx3dzfpq0xljkz.lambda-url.ap-southeast-2.on.aws/api/v1
           VITE_CLIENT_ID_GOOGLE: ${{ vars.VITE_CLIENT_ID_GOOGLE }}
         run: npm run build
 
