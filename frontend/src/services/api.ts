@@ -65,6 +65,7 @@ api.interceptors.response.use(
       originalRequest.url?.includes('/auth/login') ||
       originalRequest.url?.includes('/auth/register') ||
       originalRequest.url?.includes('/auth/google') ||
+      originalRequest.url?.includes('/auth/logout') ||
       originalRequest.url?.includes('/auth/refresh');
 
     if (error.response?.status === 401 && !originalRequest._retry && !isAuthEndpoint) {

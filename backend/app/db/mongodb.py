@@ -191,7 +191,7 @@ class MongoDBManager:
     async def create_oauth_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
         payload = {
             **user_data,
-            "password_hash": "",
+            "hashed_password": "",
             "auth_provider": user_data.get("auth_provider", "google"),
             "is_verified": user_data.get("is_verified", True),
         }

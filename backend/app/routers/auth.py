@@ -142,3 +142,11 @@ def decode_refresh_user(refresh_token: str) -> str:
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
     return current_user
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(
+    current_user: UserResponse = Depends(get_current_user),
+) -> None:
+    """Acknowledge logout. JWTs remain valid until expiry (stateless)."""
+    return None

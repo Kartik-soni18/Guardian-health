@@ -4,7 +4,8 @@ export function isAccessTokenExpired(token: string): boolean {
     const payload = token.split('.')[1];
     if (!payload) return true;
     const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const decoded = JSON.parse(atob(normalized)) as { exp?: number };
+    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
+    const decoded = JSON.parse(atob(padded)) as { exp?: number };
     if (!decoded.exp) return true;
     return decoded.exp * 1000 <= Date.now();
   } catch {

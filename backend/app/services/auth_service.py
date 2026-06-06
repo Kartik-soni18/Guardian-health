@@ -31,7 +31,7 @@ class AuthService:
 
         user_data = {
             "username": user_create.username,
-            "password_hash": get_password_hash(user_create.password),
+            "hashed_password": get_password_hash(user_create.password),
             "auth_provider": "local",
         }
         return await self.db.create_user(user_data)
@@ -40,10 +40,10 @@ class AuthService:
         user = await self.db.get_user_by_username(username)
         if user is None:
             return None
-        password_hash = user.get("hashed_password", user.get("password_hash", ""))
-        if not password_hash:
+        hashed_password = user.get("hashed_password", user.get("password_hash", ""))
+        if not hashed_password:
             return None
-        if not verify_password(password, password_hash):
+        if not verify_password(password, hashed_password):
             return None
         if not user.get("is_active", True):
             return None

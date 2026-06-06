@@ -17,6 +17,7 @@ interface BackendTokenResponse {
     is_active: boolean;
     is_verified: boolean;
     created_at: string;
+    updated_at?: string;
   };
 }
 
@@ -25,7 +26,7 @@ function mapUser(user: BackendTokenResponse['user']): User {
     id: user.id,
     username: user.username,
     createdAt: user.created_at,
-    updatedAt: user.created_at,
+    updatedAt: user.updated_at ?? user.created_at,
   };
 }
 
@@ -88,6 +89,10 @@ export const authService = {
   },
 
   async logout(): Promise<void> {
-    return;
+    try {
+      await api.post('/auth/logout');
+    } catch {
+      // Clear local session even if the server call fails.
+    }
   },
 };
