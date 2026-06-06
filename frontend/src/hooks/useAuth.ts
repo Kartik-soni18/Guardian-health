@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback } from 'react';
+import axios from 'axios';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
 import { goToAppHome } from '@/lib/routes';
@@ -57,16 +58,22 @@ export function useAuth() {
   });
 
   const initAuth = useCallback(() => {
-    const token = useAuthStore.getState().accessToken;
-    if (token) {
+    const { accessToken, refreshToken } = useAuthStore.getState();
+    if (accessToken) {
       setLoading(true);
       authService
         .getMe()
         .then((userData) => {
+          if (refreshToken) {
+            login(accessToken, refreshToken);
+          }
           setUser(userData);
         })
-        .catch(() => {
-          logoutStore();
+        .catch((error: unknown) => {
+          const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+          if (status === 401) {
+            logoutStore();
+          }
         })
         .finally(() => {
           setLoading(false);
@@ -74,7 +81,7 @@ export function useAuth() {
     } else {
       setLoading(false);
     }
-  }, [setLoading, setUser, logoutStore]);
+  }, [setLoading, setUser, login, logoutStore]);
 
   return {
     user,

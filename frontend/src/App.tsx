@@ -7,9 +7,11 @@ import { HomePage } from '@/pages/HomePage';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/useToast';
 import { ensureProjectPath } from '@/lib/routes';
+import { useAuthStore } from '@/stores/authStore';
 
 export function App() {
   const { initAuth } = useAuth();
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const toast = useToast();
 
   useEffect(() => {
@@ -26,8 +28,13 @@ export function App() {
 
   useEffect(() => {
     ensureProjectPath();
-    initAuth();
-  }, [initAuth]);
+  }, []);
+
+  useEffect(() => {
+    if (hasHydrated) {
+      initAuth();
+    }
+  }, [hasHydrated, initAuth]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-white text-gray-900 transition-colors dark:bg-gray-950 dark:text-gray-100">

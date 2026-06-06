@@ -1,4 +1,5 @@
 import { api } from './api';
+import { useAuthStore } from '@/stores/authStore';
 import { Chat, ChatMessage } from '@/types';
 
 export const chatService = {
@@ -34,13 +35,14 @@ export const chatService = {
     onError: (error: Error) => void
   ): Promise<void> {
     try {
+      const token = useAuthStore.getState().accessToken;
       const response = await fetch(
         `${import.meta.env.VITE_API_URL || '/api'}/chats/${chatId}/messages/stream`,
         {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('accessToken') || ''}`,
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({ content }),
         }
