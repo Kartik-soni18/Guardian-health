@@ -4,6 +4,7 @@ import axios from 'axios';
 import { authService } from '@/services/authService';
 import { useAuthStore } from '@/stores/authStore';
 import { goToAppHome } from '@/lib/routes';
+import { isAccessTokenExpired } from '@/lib/token';
 import { LoginCredentials, RegisterData } from '@/types';
 
 export function useAuth() {
@@ -28,7 +29,7 @@ export function useAuth() {
       setUser(userData);
       return userData;
     },
-    enabled: isAuthenticated && !user,
+    enabled: false,
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -89,25 +90,32 @@ export function useAuth() {
     }
 
     setLoading(true);
-    authService
-      .getMe()
-      .then((userData) => {
+
+    const bootstrap = async () => {
+      try {
+        if (refreshToken && isAccessTokenExpired(accessToken)) {
+          const refreshed = await authService.refreshToken(refreshToken);
+          useAuthStore.getState().login(refreshed.accessToken, refreshed.refreshToken);
+        }
+
+        const userData = await authService.getMe();
         const current = useAuthStore.getState();
-        restoreSession(current.accessToken ?? accessToken, current.refreshToken ?? refreshToken, userData);
-      })
-      .catch((error: unknown) => {
+        restoreSession(
+          current.accessToken ?? accessToken,
+          current.refreshToken ?? refreshToken,
+          userData,
+        );
+      } catch (error: unknown) {
         const status = axios.isAxiosError(error) ? error.response?.status : undefined;
-        if (status === 401) {
-          const stillHasSession = useAuthStore.getState().accessToken;
-          if (!stillHasSession) {
-            return;
-          }
+        if (status === 401 || status === 403) {
           logoutStore();
         }
-      })
-      .finally(() => {
+      } finally {
         setLoading(false);
-      });
+      }
+    };
+
+    void bootstrap();
   }, [setLoading, restoreSession, logoutStore]);
 
   const isBootstrapping = !hasHydrated || isLoading || meQuery.isLoading;
