@@ -28,6 +28,27 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      - name: Validate GitHub Actions variables
+        run: |
+          missing=0
+          if [ -z "${{ vars.VITE_API_URL }}" ]; then
+            echo "::error::Missing repository variable: VITE_API_URL"
+            missing=1
+          fi
+          if [ -z "${{ vars.VITE_STREAM_API_URL }}" ]; then
+            echo "::error::Missing repository variable: VITE_STREAM_API_URL"
+            missing=1
+          fi
+          if [ -z "${{ vars.VITE_CLIENT_ID_GOOGLE }}" ]; then
+            echo "::error::Missing repository variable: VITE_CLIENT_ID_GOOGLE (Google Sign-In button will not appear without this)"
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            echo ""
+            echo "Add them under: Settings → Secrets and variables → Actions → Variables"
+            exit 1
+          fi
+
       - name: Build
         working-directory: frontend
         env:
